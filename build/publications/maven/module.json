@@ -1,0 +1,131 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.utility",
+    "module": "blockchain-relay-utility",
+    "version": "1.0.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.9.25"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "blockchain-relay-utility-1.0.0-plain.jar",
+          "url": "blockchain-relay-utility-1.0.0-plain.jar",
+          "size": 61094,
+          "sha512": "a590d6d5fe133eb7f1b54d514759378dbb21b3b25c832fe401487c57d83f73fc574760d304961850017b31d8af3dbd3bfaf0c5b346ec2afea0e7fc3074a866a0",
+          "sha256": "2572563e542dfbf25f3ec2e4c00d1ff7aec8d9793e1960ad80391f2dc8a174a6",
+          "sha1": "4e45969940327071c09dbec92a340ae7bb09e62b",
+          "md5": "b567573235582d523185f56200de3787"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.springframework.boot",
+          "module": "spring-boot-starter-web"
+        },
+        {
+          "group": "org.springframework.boot",
+          "module": "spring-boot-starter-webflux"
+        },
+        {
+          "group": "org.springframework.boot",
+          "module": "spring-boot-starter-validation"
+        },
+        {
+          "group": "org.springframework.boot",
+          "module": "spring-boot-starter-actuator"
+        },
+        {
+          "group": "com.fasterxml.jackson.module",
+          "module": "jackson-module-kotlin"
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-reflect",
+          "version": {
+            "requires": "1.9.25"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core"
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-reactor"
+        },
+        {
+          "group": "org.web3j",
+          "module": "core",
+          "version": {
+            "requires": "4.12.2"
+          }
+        },
+        {
+          "group": "org.springdoc",
+          "module": "springdoc-openapi-starter-webmvc-ui",
+          "version": {
+            "requires": "2.7.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.9.25"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "blockchain-relay-utility-1.0.0-plain.jar",
+          "url": "blockchain-relay-utility-1.0.0-plain.jar",
+          "size": 61094,
+          "sha512": "a590d6d5fe133eb7f1b54d514759378dbb21b3b25c832fe401487c57d83f73fc574760d304961850017b31d8af3dbd3bfaf0c5b346ec2afea0e7fc3074a866a0",
+          "sha256": "2572563e542dfbf25f3ec2e4c00d1ff7aec8d9793e1960ad80391f2dc8a174a6",
+          "sha1": "4e45969940327071c09dbec92a340ae7bb09e62b",
+          "md5": "b567573235582d523185f56200de3787"
+        }
+      ]
+    }
+  ]
+}
