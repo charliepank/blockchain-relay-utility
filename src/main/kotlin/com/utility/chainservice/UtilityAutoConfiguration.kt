@@ -63,9 +63,9 @@ class UtilityAutoConfiguration(
         return Credentials.create(privateKey)
     }
 
-    @Bean
-    @ConditionalOnMissingBean(name = ["chainIdBean"])
-    fun chainIdBean(web3j: Web3j): Long {
+    @Bean("chainId")
+    @ConditionalOnMissingBean(name = ["chainId"])
+    fun chainId(web3j: Web3j): Long {
         return try {
             val chainIdResponse = web3j.ethChainId().send()
             if (chainIdResponse.hasError()) {
