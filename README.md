@@ -73,6 +73,12 @@ your-service:
 ### 3. Create Your Plugin
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.BlockchainRelayService
+import com.utility.chainservice.plugin.BlockchainServicePlugin
+import io.swagger.v3.oas.models.tags.Tag
+import org.springframework.stereotype.Component
+
 @Component
 class MyServicePlugin : BlockchainServicePlugin {
     override fun getPluginName(): String = "my-service"
@@ -98,6 +104,9 @@ class MyServicePlugin : BlockchainServicePlugin {
 ### 4. Create Your Controller
 
 ```kotlin
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
+
 @RestController
 @RequestMapping("/api/my-service")
 class MyServiceController(
@@ -115,6 +124,9 @@ class MyServiceController(
 ### 5. Enable Component Scan
 
 ```kotlin
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.context.annotation.ComponentScan
+
 @SpringBootApplication
 @ComponentScan(basePackages = ["com.yourcompany.yourapp", "com.utility.chainservice"])
 class YourApplication
@@ -142,6 +154,10 @@ The utility provides these generic endpoints:
 Implement `BlockchainServicePlugin` to add your business logic:
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.BlockchainRelayService
+import io.swagger.v3.oas.models.tags.Tag
+
 interface BlockchainServicePlugin {
     fun getPluginName(): String
     fun getApiPrefix(): String
@@ -189,6 +205,9 @@ blockchain:
 ### Example Business Properties Class
 
 ```kotlin
+import org.springframework.boot.context.properties.ConfigurationProperties
+import java.math.BigInteger
+
 @ConfigurationProperties(prefix = "my-service")
 data class MyServiceProperties(
     var contractAddress: String = "",
@@ -203,6 +222,10 @@ The utility supports pluggable authentication:
 ### HTTP Authentication (Default)
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.HttpAuthenticationProvider
+import org.springframework.context.annotation.Bean
+
 @Bean
 fun authenticationProvider(): AuthenticationProvider {
     return HttpAuthenticationProvider(
@@ -215,6 +238,11 @@ fun authenticationProvider(): AuthenticationProvider {
 ### Custom Authentication
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.models.AuthenticationResult
+import org.springframework.stereotype.Component
+import reactor.core.publisher.Mono
+
 @Component
 class CustomAuthProvider : AuthenticationProvider {
     override fun validateToken(authToken: String, httpOnlyToken: String?): Mono<AuthenticationResult> {
@@ -301,6 +329,11 @@ class Web3Config {
 Convert your business logic to a plugin:
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.BlockchainRelayService
+import com.utility.chainservice.plugin.BlockchainServicePlugin
+import org.springframework.stereotype.Component
+
 @Component
 class MyServicePlugin(
     private val myTransactionService: MyTransactionService
@@ -399,6 +432,10 @@ AuthenticationProvider bean not found
 **Solution**: Either configure the default HTTP authentication provider or implement a custom one:
 
 ```kotlin
+import com.utility.chainservice.AuthenticationProvider
+import com.utility.chainservice.HttpAuthenticationProvider
+import org.springframework.context.annotation.Bean
+
 @Bean  
 fun authenticationProvider(): AuthenticationProvider {
     return HttpAuthenticationProvider(userServiceUrl, enabled = true)
@@ -416,6 +453,9 @@ logging:
 
 2. **Check Spring context** for bean conflicts:
 ```kotlin
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.ApplicationContext
+
 @Autowired
 lateinit var applicationContext: ApplicationContext
 
