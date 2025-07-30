@@ -64,7 +64,7 @@ class UtilityAutoConfiguration(
     }
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(name = ["chainIdBean"])
     fun chainIdBean(web3j: Web3j): Long {
         return try {
             val chainIdResponse = web3j.ethChainId().send()
