@@ -249,6 +249,189 @@ To use in your project:
 - `v1.0.0` - Stable release (when tagged)
 - Any commit hash or branch name
 
+## Migration Guide
+
+### Upgrading from Legacy Controllers to Plugin Architecture
+
+If you have existing blockchain transaction controllers, follow these steps to migrate to the plugin architecture:
+
+#### 1. Remove Legacy Controllers
+Remove existing controllers that directly implement blockchain transaction endpoints to avoid mapping conflicts.
+
+**Example - Remove conflicting controllers:**
+```kotlin
+// ❌ Remove this - conflicts with plugin endpoints
+@RestController
+@RequestMapping("/api/chain")  
+class ChainController {
+    @PostMapping("/claim-funds")  // This conflicts with plugin
+    fun claimFunds(request: ClaimFundsRequest): ResponseEntity<ClaimFundsResponse>
+}
+```
+
+#### 2. Update Dependencies
+Update your build.gradle.kts to use the latest version:
+
+```kotlin
+dependencies {
+    // Update to latest version
+    implementation("com.github.charliepank:blockchain-relay-utility:v0.0.8")
+    
+    // Remove old blockchain configuration dependencies if any
+    // The utility now provides all necessary blockchain configs
+}
+```
+
+#### 3. Remove Conflicting Configuration
+Remove any duplicate Web3j or blockchain configuration beans:
+
+```kotlin
+// ❌ Remove these - provided by the utility
+@Configuration
+class Web3Config {
+    @Bean
+    fun web3j(): Web3j = Web3j.build(HttpService(rpcUrl))  // Conflicts!
+    
+    @Bean 
+    fun chainId(): Long = 43113  // Conflicts!
+}
+```
+
+#### 4. Migrate to Plugin Pattern
+Convert your business logic to a plugin:
+
+```kotlin
+@Component
+class MyServicePlugin(
+    private val myTransactionService: MyTransactionService
+) : BlockchainServicePlugin {
+    
+    override fun getPluginName(): String = "my-service"
+    override fun getApiPrefix(): String = "/api/chain"  // Keep existing API paths
+    
+    override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
+        // Initialize with utility services
+        myTransactionService.initialize(relayService, authProvider)
+    }
+    
+    // ... rest of plugin implementation
+}
+```
+
+### Configuration Property Migration
+
+**Before (Conflicting):**
+```yaml
+blockchain:
+  rpcUrl: "${RPC_URL}"
+  contractAddress: "${CONTRACT_ADDRESS}"  # ❌ Will conflict
+  creatorFee: 1000000                    # ❌ Will conflict
+```
+
+**After (Correct):**
+```yaml
+# Core blockchain properties (provided by utility)
+blockchain:
+  rpcUrl: "${RPC_URL}"
+  chainId: 43113
+  relayer:
+    privateKey: "${RELAYER_PRIVATE_KEY}"
+    walletAddress: "${RELAYER_WALLET_ADDRESS}"
+
+# Your business properties (separate prefix)
+my-service:
+  contractAddress: "${CONTRACT_ADDRESS}"
+  creatorFee: 1000000
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Ambiguous Mapping Errors
+```
+Ambiguous mapping. Cannot map 'myController' method to {POST [/api/chain/operation]}: 
+There is already 'pluginController' bean method mapped.
+```
+
+**Cause**: Duplicate controller endpoints between your legacy controllers and the plugin system.
+
+**Solution**: Remove legacy controllers that implement the same endpoints as your plugin.
+
+#### 2. Bean Definition Override Errors
+```
+Invalid bean definition with name 'web3j': Cannot register bean definition... 
+since there is already [...] bound.
+```
+
+**Cause**: Your application defines beans that conflict with the utility's auto-configuration.
+
+**Solution**: Remove duplicate bean definitions from your configuration classes.
+
+#### 3. Configuration Property Binding Errors
+```
+Failed to bind properties under 'blockchain' to com.yourapp.YourProperties
+```
+
+**Cause**: Using the reserved `blockchain` prefix for your business properties.
+
+**Solution**: Use a different prefix for your `@ConfigurationProperties` classes.
+
+#### 4. Plugin Not Found Errors
+```
+No blockchain service plugins found
+```
+
+**Cause**: Component scan not including the utility packages or plugin not properly annotated.
+
+**Solution**: 
+- Ensure `@ComponentScan` includes both your packages and `"com.utility.chainservice"`
+- Verify your plugin class is annotated with `@Component`
+- Check that your plugin implements `BlockchainServicePlugin`
+
+#### 5. Authentication Integration Issues
+```
+AuthenticationProvider bean not found
+```
+
+**Cause**: No authentication provider configured or conflicting authentication setup.
+
+**Solution**: Either configure the default HTTP authentication provider or implement a custom one:
+
+```kotlin
+@Bean  
+fun authenticationProvider(): AuthenticationProvider {
+    return HttpAuthenticationProvider(userServiceUrl, enabled = true)
+}
+```
+
+### Debug Tips
+
+1. **Enable debug logging** to see plugin initialization:
+```yaml
+logging:
+  level:
+    com.utility.chainservice.plugin: DEBUG
+```
+
+2. **Check Spring context** for bean conflicts:
+```kotlin
+@Autowired
+lateinit var applicationContext: ApplicationContext
+
+fun debugBeans() {
+    applicationContext.getBeanDefinitionNames()
+        .filter { it.contains("web3j") }
+        .forEach { println("Bean: $it") }
+}
+```
+
+3. **Verify plugin registration**:
+```
+2025-07-30 20:13:37 [main] INFO  c.u.c.plugin.PluginConfiguration - Initializing 1 blockchain service plugins
+2025-07-30 20:13:37 [main] INFO  c.u.c.plugin.PluginConfiguration - Successfully initialized plugin: my-service
+```
+
 ## Examples
 
 See the [examples directory](./examples) for complete plugin implementations:
