@@ -50,17 +50,17 @@ The utility provides core blockchain configuration via `BlockchainProperties`. A
 ```yaml
 # application.yml
 blockchain:
-  rpc-url: "https://api.avax-test.network/ext/bc/C/rpc"
-  chain-id: 43113  # Optional, auto-detected if not specified
+  rpcUrl: "https://api.avax-test.network/ext/bc/C/rpc"
+  chainId: 43113  # Optional, auto-detected if not specified
   relayer:
-    private-key: "0x..." # Your relayer wallet private key
-    wallet-address: "0x..." # Your relayer wallet address
+    privateKey: "0x..." # Your relayer wallet private key
+    walletAddress: "0x..." # Your relayer wallet address
   gas:
-    price-multiplier: 1.2
-    minimum-gas-price-wei: 6
+    priceMultiplier: 1.2
+    minimumGasPriceWei: 6
 
 auth:
-  user-service-url: "https://your-user-service.com"
+  userServiceUrl: "https://your-user-service.com"
   enabled: true
 
 # Add your business-specific properties here
@@ -167,23 +167,23 @@ The utility uses `@ConfigurationProperties(prefix = "blockchain")` for core bloc
 ```yaml
 # ✅ Correct - utility properties
 blockchain:
-  rpc-url: "${RPC_URL}"
-  chain-id: 43113  # Default: auto-detected from RPC
+  rpcUrl: "${RPC_URL}"
+  chainId: 43113  # Default: auto-detected from RPC
   relayer:
-    private-key: "${RELAYER_PRIVATE_KEY}"
-    wallet-address: "${RELAYER_WALLET_ADDRESS}"
+    privateKey: "${RELAYER_PRIVATE_KEY}"
+    walletAddress: "${RELAYER_WALLET_ADDRESS}"
   gas:
-    price-multiplier: 1.2  # Default: 1.2x network gas price
-    minimum-gas-price-wei: 6  # Default: 6 wei minimum
+    priceMultiplier: 1.2  # Default: 1.2x network gas price
+    minimumGasPriceWei: 6  # Default: 6 wei minimum
 
 # ✅ Correct - your business properties
 my-service:
-  contract-address: "${CONTRACT_ADDRESS}"
-  fee-amount: 1000000
+  contractAddress: "${CONTRACT_ADDRESS}"
+  feeAmount: 1000000
 
 # ❌ Wrong - will conflict with utility
 blockchain:
-  contract-address: "${CONTRACT_ADDRESS}"  # This conflicts!
+  contractAddress: "${CONTRACT_ADDRESS}"  # This conflicts!
 ```
 
 ### Example Business Properties Class
