@@ -15,6 +15,27 @@ A generic Kotlin/Spring Boot utility for blockchain transaction relaying with ga
 
 ### 1. Add Dependency
 
+#### Via JitPack (Recommended)
+
+Add JitPack repository to your `build.gradle.kts`:
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven { url = uri("https://jitpack.io") }
+}
+
+dependencies {
+    implementation("com.github.charliep:blockchain-relay-utility:main-SNAPSHOT")
+    // Or use a specific release tag:
+    // implementation("com.github.charliep:blockchain-relay-utility:v1.0.0")
+    
+    // Add your Web3j and Spring Boot dependencies
+}
+```
+
+#### Via Maven Local (Development)
+
 ```kotlin
 dependencies {
     implementation("com.utility:blockchain-relay-utility:1.0.0")
@@ -176,6 +197,22 @@ The utility automatically:
 2. Transfers AVAX to user wallets if insufficient balance
 3. Forwards original signed transactions unchanged
 4. Handles both legacy and EIP-1559 transactions
+
+## JitPack Publishing
+
+This library is published via JitPack for easy dependency management:
+
+[![](https://jitpack.io/v/charliep/blockchain-relay-utility.svg)](https://jitpack.io/#charliep/blockchain-relay-utility)
+
+To use in your project:
+1. Add JitPack repository to your build file
+2. Add the dependency with the desired version/branch
+3. JitPack will automatically build and serve the library
+
+### Available Versions
+- `main-SNAPSHOT` - Latest development version
+- `v1.0.0` - Stable release (when tagged)
+- Any commit hash or branch name
 
 ## Examples
 

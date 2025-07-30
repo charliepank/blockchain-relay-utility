@@ -1,0 +1,12 @@
+# JitPack configuration
+jdk:
+  - openjdk17
+
+# Build commands (optional - JitPack will use gradle by default)
+# install:  
+#   - echo "Running JitPack build"
+
+# Environment variables for build
+env:
+  # Disable Spring Boot's fat jar for library publishing
+  SPRING_BOOT_JAR_ENABLED: false
