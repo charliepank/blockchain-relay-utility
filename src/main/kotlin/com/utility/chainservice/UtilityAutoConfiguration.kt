@@ -48,6 +48,7 @@ class UtilityAutoConfiguration(
     @Bean
     @ConditionalOnMissingBean
     fun web3jClient(): Web3j {
+        require(blockchainProperties.rpcUrl.isNotBlank()) { "RPC_URL is required" }
         return Web3j.build(HttpService(blockchainProperties.rpcUrl))
     }
 

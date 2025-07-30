@@ -45,10 +45,13 @@ dependencies {
 
 ### 2. Configure Application
 
+The utility provides core blockchain configuration via `BlockchainProperties`. Add your business-specific properties separately to avoid conflicts.
+
 ```yaml
 # application.yml
 blockchain:
   rpc-url: "https://api.avax-test.network/ext/bc/C/rpc"
+  chain-id: 43113  # Optional, auto-detected if not specified
   relayer:
     private-key: "0x..." # Your relayer wallet private key
     wallet-address: "0x..." # Your relayer wallet address
@@ -59,6 +62,12 @@ blockchain:
 auth:
   user-service-url: "https://your-user-service.com"
   enabled: true
+
+# Add your business-specific properties here
+# DO NOT use 'blockchain' prefix for custom properties
+your-service:
+  contract-address: "0x..."
+  custom-setting: "value"
 ```
 
 ### 3. Create Your Plugin
@@ -151,14 +160,40 @@ interface BlockchainServicePlugin {
 - `RELAYER_WALLET_ADDRESS` - Address of the relayer wallet
 - `USER_SERVICE_URL` - URL for user authentication service (if using HTTP auth)
 
-### Optional Configuration
+### Property Configuration
+
+The utility uses `@ConfigurationProperties(prefix = "blockchain")` for core blockchain settings. **Important**: Only use the `blockchain` prefix for utility-provided properties. For your business-specific configuration, create separate `@ConfigurationProperties` classes with different prefixes.
 
 ```yaml
+# ✅ Correct - utility properties
 blockchain:
+  rpc-url: "${RPC_URL}"
   chain-id: 43113  # Default: auto-detected from RPC
+  relayer:
+    private-key: "${RELAYER_PRIVATE_KEY}"
+    wallet-address: "${RELAYER_WALLET_ADDRESS}"
   gas:
     price-multiplier: 1.2  # Default: 1.2x network gas price
     minimum-gas-price-wei: 6  # Default: 6 wei minimum
+
+# ✅ Correct - your business properties
+my-service:
+  contract-address: "${CONTRACT_ADDRESS}"
+  fee-amount: 1000000
+
+# ❌ Wrong - will conflict with utility
+blockchain:
+  contract-address: "${CONTRACT_ADDRESS}"  # This conflicts!
+```
+
+### Example Business Properties Class
+
+```kotlin
+@ConfigurationProperties(prefix = "my-service")
+data class MyServiceProperties(
+    var contractAddress: String = "",
+    var feeAmount: BigInteger = BigInteger.ZERO
+)
 ```
 
 ## Authentication
