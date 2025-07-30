@@ -46,7 +46,7 @@ class UtilityAutoConfigurationTest {
 
     @Test
     fun `should create Web3j client with correct RPC URL`() {
-        val web3j = utilityAutoConfiguration.web3jClient()
+        val web3j = utilityAutoConfiguration.web3j()
         
         assertNotNull(web3j)
         // Web3j doesn't expose the RPC URL easily, so we just verify it's created
@@ -54,7 +54,7 @@ class UtilityAutoConfigurationTest {
 
     @Test
     fun `should create relayer credentials with valid private key`() {
-        val credentials = utilityAutoConfiguration.relayerCredentialsBean()
+        val credentials = utilityAutoConfiguration.relayerCredentials()
         
         assertNotNull(credentials)
         assertEquals("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf", credentials.address.lowercase())
@@ -70,7 +70,7 @@ class UtilityAutoConfigurationTest {
         val invalidConfig = UtilityAutoConfiguration(invalidBlockchainProperties, authProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
-            invalidConfig.relayerCredentialsBean()
+            invalidConfig.relayerCredentials()
         }
     }
 
@@ -84,7 +84,7 @@ class UtilityAutoConfigurationTest {
         val blankConfig = UtilityAutoConfiguration(blankBlockchainProperties, authProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
-            blankConfig.relayerCredentialsBean()
+            blankConfig.relayerCredentials()
         }
     }
 
@@ -98,7 +98,7 @@ class UtilityAutoConfigurationTest {
         val shortConfig = UtilityAutoConfiguration(shortBlockchainProperties, authProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
-            shortConfig.relayerCredentialsBean()
+            shortConfig.relayerCredentials()
         }
     }
 
@@ -155,7 +155,7 @@ class UtilityAutoConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L)) // 25 gwei
         
-        val gasProvider = utilityAutoConfiguration.genericGasProvider(web3j)
+        val gasProvider = utilityAutoConfiguration.gasProvider(web3j)
         
         assertNotNull(gasProvider)
         
@@ -175,7 +175,7 @@ class UtilityAutoConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(1L)) // Very low gas price
         
-        val gasProvider = utilityAutoConfiguration.genericGasProvider(web3j)
+        val gasProvider = utilityAutoConfiguration.gasProvider(web3j)
         
         // Should use minimum price of 6 wei instead of 1.2 wei (1 * 1.2)
         assertEquals(BigInteger.valueOf(6L), gasProvider.gasPrice)
@@ -187,7 +187,7 @@ class UtilityAutoConfigurationTest {
         
         whenever(web3j.ethGasPrice()).thenThrow(RuntimeException("Network error"))
         
-        val gasProvider = utilityAutoConfiguration.genericGasProvider(web3j)
+        val gasProvider = utilityAutoConfiguration.gasProvider(web3j)
         
         assertEquals(BigInteger.valueOf(6L), gasProvider.gasPrice)
     }
@@ -226,7 +226,7 @@ class UtilityAutoConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L))
         
-        val gasProvider = utilityAutoConfiguration.genericGasProvider(web3j)
+        val gasProvider = utilityAutoConfiguration.gasProvider(web3j)
         
         // Test both overloaded methods
         assertEquals(gasProvider.gasPrice, gasProvider.getGasPrice("someFunction"))

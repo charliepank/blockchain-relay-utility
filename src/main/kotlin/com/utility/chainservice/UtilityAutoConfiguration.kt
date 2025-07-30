@@ -45,16 +45,16 @@ class UtilityAutoConfiguration(
     private val authProperties: AuthProperties
 ) {
 
-    @Bean
+    @Bean("web3j")
     @ConditionalOnMissingBean
-    fun web3jClient(): Web3j {
+    fun web3j(): Web3j {
         require(blockchainProperties.rpcUrl.isNotBlank()) { "RPC_URL is required" }
         return Web3j.build(HttpService(blockchainProperties.rpcUrl))
     }
 
-    @Bean
+    @Bean("relayerCredentials")
     @ConditionalOnMissingBean
-    fun relayerCredentialsBean(): Credentials {
+    fun relayerCredentials(): Credentials {
         val privateKey = blockchainProperties.relayer.privateKey
         require(privateKey.isNotBlank()) { "RELAYER_PRIVATE_KEY is required" }
         require(privateKey.startsWith("0x") && privateKey.length == 66) { 
@@ -64,7 +64,6 @@ class UtilityAutoConfiguration(
     }
 
     @Bean("chainId")
-    @ConditionalOnMissingBean(name = ["chainId"])
     fun chainId(web3j: Web3j): Long {
         return try {
             val chainIdResponse = web3j.ethChainId().send()
@@ -78,9 +77,9 @@ class UtilityAutoConfiguration(
         }
     }
 
-    @Bean
+    @Bean("gasProvider")
     @ConditionalOnMissingBean
-    fun genericGasProvider(web3j: Web3j): ContractGasProvider {
+    fun gasProvider(web3j: Web3j): ContractGasProvider {
         return object : ContractGasProvider {
             override fun getGasPrice(contractFunc: String?): BigInteger {
                 return try {

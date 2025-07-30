@@ -26,7 +26,7 @@ class BlockchainConfigurationTest {
     fun `should create Web3j client with correct RPC URL`() {
         val rpcUrl = "https://api.avax-test.network/ext/bc/C/rpc"
         
-        val client = blockchainConfiguration.web3jClient(rpcUrl)
+        val client = blockchainConfiguration.web3j(rpcUrl)
         
         assertNotNull(client)
         // Web3j doesn't expose the RPC URL directly, but we can verify it was created
@@ -36,7 +36,7 @@ class BlockchainConfigurationTest {
     fun `should create relayer credentials with valid private key`() {
         val validPrivateKey = "0x1234567890123456789012345678901234567890123456789012345678901234"
         
-        val credentials = blockchainConfiguration.relayerCredentialsBean(validPrivateKey)
+        val credentials = blockchainConfiguration.relayerCredentials(validPrivateKey)
         
         assertNotNull(credentials)
         // The address is deterministic based on the private key - actual derived address
@@ -46,7 +46,7 @@ class BlockchainConfigurationTest {
     @Test
     fun `should throw IllegalArgumentException for blank private key`() {
         val exception = assertThrows(IllegalStateException::class.java) {
-            blockchainConfiguration.relayerCredentialsBean("")
+            blockchainConfiguration.relayerCredentials("")
         }
         
         assertTrue(exception.message!!.contains("RELAYER_PRIVATE_KEY is empty or not set"))
@@ -58,7 +58,7 @@ class BlockchainConfigurationTest {
         val invalidPrivateKey = "1234567890123456789012345678901234567890123456789012345678901234"
         
         val exception = assertThrows(IllegalStateException::class.java) {
-            blockchainConfiguration.relayerCredentialsBean(invalidPrivateKey)
+            blockchainConfiguration.relayerCredentials(invalidPrivateKey)
         }
         
         assertTrue(exception.message!!.contains("RELAYER_PRIVATE_KEY must be a 64-character hex string prefixed with 0x"))
@@ -70,7 +70,7 @@ class BlockchainConfigurationTest {
         val shortPrivateKey = "0x123456"
         
         val exception = assertThrows(IllegalStateException::class.java) {
-            blockchainConfiguration.relayerCredentialsBean(shortPrivateKey)
+            blockchainConfiguration.relayerCredentials(shortPrivateKey)
         }
         
         assertTrue(exception.message!!.contains("RELAYER_PRIVATE_KEY must be a 64-character hex string prefixed with 0x"))
@@ -82,7 +82,7 @@ class BlockchainConfigurationTest {
         val invalidHexKey = "0xGHIJKLMNOPQRSTUVWXYZ1234567890123456789012345678901234567890123456"
         
         val exception = assertThrows(IllegalStateException::class.java) {
-            blockchainConfiguration.relayerCredentialsBean(invalidHexKey)
+            blockchainConfiguration.relayerCredentials(invalidHexKey)
         }
         
         assertTrue(exception.message!!.contains("Invalid RELAYER_PRIVATE_KEY"))
@@ -99,7 +99,7 @@ class BlockchainConfigurationTest {
         whenever(chainIdResponse.hasError()).thenReturn(false)
         whenever(chainIdResponse.chainId).thenReturn(BigInteger.valueOf(43114L))
         
-        val chainId = blockchainConfiguration.chainIdBean(web3j, fallbackChainId)
+        val chainId = blockchainConfiguration.legacyChainId(web3j, fallbackChainId)
         
         assertEquals(43114L, chainId)
         verify(web3j).ethChainId()
@@ -118,7 +118,7 @@ class BlockchainConfigurationTest {
         whenever(chainIdResponse.error).thenReturn(error)
         whenever(error.message).thenReturn("Network error")
         
-        val chainId = blockchainConfiguration.chainIdBean(web3j, fallbackChainId)
+        val chainId = blockchainConfiguration.legacyChainId(web3j, fallbackChainId)
         
         assertEquals(43113L, chainId)
     }
@@ -129,7 +129,7 @@ class BlockchainConfigurationTest {
         
         whenever(web3j.ethChainId()).thenThrow(RuntimeException("Connection failed"))
         
-        val chainId = blockchainConfiguration.chainIdBean(web3j, fallbackChainId)
+        val chainId = blockchainConfiguration.legacyChainId(web3j, fallbackChainId)
         
         assertEquals(43113L, chainId)
     }
@@ -144,7 +144,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L)) // 25 gwei
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.2, 6L, gasLimitsConfig
         )
         
@@ -167,7 +167,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(1L)) // Very low gas price
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.2, minimumGasPriceWei, gasLimitsConfig
         )
         
@@ -182,7 +182,7 @@ class BlockchainConfigurationTest {
         
         whenever(web3j.ethGasPrice()).thenThrow(RuntimeException("Network error"))
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.5, minimumGasPriceWei, gasLimitsConfig
         )
         
@@ -199,7 +199,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L))
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.2, 6L, gasLimitsConfig
         )
         
@@ -217,7 +217,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L))
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.2, 6L, gasLimitsConfig
         )
         
@@ -236,7 +236,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(25000000000L))
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.2, 6L, gasLimitsConfig
         )
         
@@ -254,7 +254,7 @@ class BlockchainConfigurationTest {
         whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
         whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(100000000000L)) // 100 gwei
         
-        val gasProvider = blockchainConfiguration.genericGasProvider(
+        val gasProvider = blockchainConfiguration.gasProvider(
             web3j, 1.5, 6L, gasLimitsConfig
         )
         

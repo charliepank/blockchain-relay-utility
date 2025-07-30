@@ -16,14 +16,14 @@ class BlockchainConfiguration {
     private val logger = LoggerFactory.getLogger(BlockchainConfiguration::class.java)
 
     @Bean
-    fun web3jClient(
+    fun web3j(
         rpcUrl: String
     ): Web3j {
         return Web3j.build(HttpService(rpcUrl))
     }
 
     @Bean
-    fun relayerCredentialsBean(
+    fun relayerCredentials(
         relayerPrivateKey: String
     ): Credentials {
         try {
@@ -43,8 +43,8 @@ class BlockchainConfiguration {
         }
     }
 
-    @Bean
-    fun chainIdBean(web3j: Web3j, fallbackChainId: Long): Long {
+    @Bean("legacyChainId")
+    fun legacyChainId(web3j: Web3j, fallbackChainId: Long): Long {
         return try {
             val chainIdResponse = web3j.ethChainId().send()
             if (chainIdResponse.hasError()) {
@@ -62,7 +62,7 @@ class BlockchainConfiguration {
     }
 
     @Bean
-    fun genericGasProvider(
+    fun gasProvider(
         web3j: Web3j,
         gasPriceMultiplier: Double,
         minimumGasPriceWei: Long,
