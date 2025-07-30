@@ -113,7 +113,7 @@ class UtilityAutoConfigurationTest {
         whenever(chainIdResponse.hasError()).thenReturn(false)
         whenever(chainIdResponse.chainId).thenReturn(BigInteger.valueOf(43114L))
         
-        val chainId = utilityAutoConfiguration.chainIdBean(web3j)
+        val chainId = utilityAutoConfiguration.chainId(web3j)
         
         assertEquals(43114L, chainId)
         verify(web3j).ethChainId()
@@ -129,7 +129,7 @@ class UtilityAutoConfigurationTest {
         whenever(chainIdRequest.send()).thenReturn(chainIdResponse)
         whenever(chainIdResponse.hasError()).thenReturn(true)
         
-        val chainId = utilityAutoConfiguration.chainIdBean(web3j)
+        val chainId = utilityAutoConfiguration.chainId(web3j)
         
         assertEquals(43113L, chainId) // Falls back to configured value
     }
@@ -140,7 +140,7 @@ class UtilityAutoConfigurationTest {
         
         whenever(web3j.ethChainId()).thenThrow(RuntimeException("Network error"))
         
-        val chainId = utilityAutoConfiguration.chainIdBean(web3j)
+        val chainId = utilityAutoConfiguration.chainId(web3j)
         
         assertEquals(43113L, chainId) // Falls back to configured value
     }
