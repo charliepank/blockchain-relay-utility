@@ -261,6 +261,55 @@ The utility automatically:
 3. Forwards original signed transactions unchanged
 4. Handles both legacy and EIP-1559 transactions
 
+## Transaction Format Requirements
+
+The utility expects properly formatted signed transactions with the following requirements:
+
+### 1. Hex-encoded Signed Transactions
+- Must be valid hex strings that can be decoded by Web3j's `TransactionDecoder.decode()`
+- Should be complete, signed transactions ready for blockchain submission
+
+### 2. Supported Transaction Types
+- **Legacy transactions**: Must include `gasPrice` field for gas pricing
+- **EIP-1559 transactions**: Must include `maxFeePerGas` field for gas pricing
+
+### 3. Required Transaction Fields
+All transactions must include:
+- `to` - Target contract or wallet address
+- `value` - Transaction value in wei (can be zero for contract calls)
+- `data` - Transaction payload (contract method calls, parameters, etc.)
+- `gasLimit` - Maximum gas units the transaction can consume
+- **Gas pricing** (one of):
+  - `gasPrice` for legacy transactions
+  - `maxFeePerGas` for EIP-1559 transactions
+
+### Example Transaction Formats
+
+**Legacy Transaction:**
+```json
+{
+  "to": "0x742b35Cc6834C532532532532532532532532532",
+  "value": "1000000000000000000",
+  "data": "0xa9059cbb...",
+  "gasLimit": "21000",
+  "gasPrice": "25000000000",
+  "nonce": "42"
+}
+```
+
+**EIP-1559 Transaction:**
+```json
+{
+  "to": "0x742b35Cc6834C532532532532532532532532532",
+  "value": "1000000000000000000", 
+  "data": "0xa9059cbb...",
+  "gasLimit": "21000",
+  "maxFeePerGas": "30000000000",
+  "maxPriorityFeePerGas": "2000000000",
+  "nonce": "42"
+}
+```
+
 ## JitPack Publishing
 
 This library is published via JitPack for easy dependency management:
