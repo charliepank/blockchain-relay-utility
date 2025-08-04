@@ -144,7 +144,8 @@ class BlockchainRelayService(
                     return TransactionResult(
                         success = false,
                         transactionHash = null,
-                        error = "Failed to transfer gas to user: ${gasTransferResult.error}"
+                        error = "Failed to transfer gas to user: ${gasTransferResult.error}",
+                        contractAddress = decodedTx.to
                     )
                 }
             } else {
@@ -159,7 +160,8 @@ class BlockchainRelayService(
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = transactionHash.error.message
+                    error = transactionHash.error.message,
+                    contractAddress = decodedTx.to
                 )
             }
 
@@ -170,13 +172,15 @@ class BlockchainRelayService(
             if (receipt?.isStatusOK == true) {
                 TransactionResult(
                     success = true,
-                    transactionHash = txHash
+                    transactionHash = txHash,
+                    contractAddress = decodedTx.to
                 )
             } else {
                 TransactionResult(
                     success = false,
                     transactionHash = txHash,
-                    error = "Transaction failed on blockchain"
+                    error = "Transaction failed on blockchain",
+                    contractAddress = decodedTx.to
                 )
             }
 
@@ -185,7 +189,8 @@ class BlockchainRelayService(
             TransactionResult(
                 success = false,
                 transactionHash = null,
-                error = e.message ?: "Unknown error occurred"
+                error = e.message ?: "Unknown error occurred",
+                contractAddress = null
             )
         }
     }

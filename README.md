@@ -261,6 +261,33 @@ The utility automatically:
 3. Forwards original signed transactions unchanged
 4. Handles both legacy and EIP-1559 transactions
 
+## API Response Models
+
+### TransactionResult
+
+The `TransactionResult` model is returned by transaction relay operations:
+
+```kotlin
+data class TransactionResult(
+    val success: Boolean,           // Whether the transaction was successful
+    val transactionHash: String?,   // Transaction hash if successful
+    val error: String? = null,      // Error message if failed
+    val contractAddress: String? = null  // Target contract address (the 'to' field from the transaction)
+)
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "transactionHash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  "error": null,
+  "contractAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f8E65"
+}
+```
+
+The `contractAddress` field contains the destination address from the transaction, making it easy to track which contract was interacted with.
+
 ## Transaction Format Requirements
 
 The utility expects properly formatted signed transactions with the following requirements:
@@ -327,6 +354,25 @@ To use in your project:
 - Any commit hash or branch name
 
 ## Migration Guide
+
+### Version Compatibility
+
+#### New in Latest Version: TransactionResult.contractAddress
+
+The latest version adds a `contractAddress` field to the `TransactionResult` model. This change is **backward compatible**:
+
+- **No code changes required** - Existing code will continue to work
+- The new field is nullable with a default value of `null`
+- When using `processTransactionWithGasTransfer`, the field is automatically populated with the transaction's destination address
+
+**Optional Usage:**
+```kotlin
+// The contractAddress field is now available
+val result = blockchainRelayService.processTransactionWithGasTransfer(...)
+if (result.success) {
+    println("Transaction sent to: ${result.contractAddress}")
+}
+```
 
 ### Upgrading from Legacy Controllers to Plugin Architecture
 

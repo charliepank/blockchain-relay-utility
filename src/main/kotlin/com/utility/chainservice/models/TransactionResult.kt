@@ -20,5 +20,12 @@ data class TransactionResult(
         description = "Error message if the transaction failed, null if successful",
         example = "Insufficient gas for transaction"
     )
-    val error: String? = null
+    val error: String? = null,
+    
+    @Schema(
+        description = "Contract address (the 'to' address from the transaction)",
+        example = "0x742d35Cc6634C0532925a3b844Bc9e7595f8E65",
+        pattern = "^0x[a-fA-F0-9]{40}$"
+    )
+    val contractAddress: String? = null
 )
