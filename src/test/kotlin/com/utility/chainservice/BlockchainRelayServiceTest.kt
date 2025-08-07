@@ -45,9 +45,7 @@ class BlockchainRelayServiceTest {
         whenever(credentials.ecKeyPair).thenReturn(ecKeyPair)
         
         val blockchainProperties = BlockchainProperties().apply {
-            gas = GasProperties().apply {
-                validationTolerancePercent = 50
-            }
+            gas = GasProperties()
         }
         blockchainRelayService = BlockchainRelayService(web3j, credentials, gasProvider, chainId, blockchainProperties)
     }
@@ -826,7 +824,7 @@ class BlockchainRelayServiceTest {
         whenever(estimateResponse.hasError()).thenReturn(false)
         whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
 
-        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+        val result = blockchainRelayService.validateGasLimits(mockTx)
 
         assertTrue(result.success)
         assertNull(result.error)
@@ -848,7 +846,7 @@ class BlockchainRelayServiceTest {
         whenever(estimateResponse.hasError()).thenReturn(false)
         whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
 
-        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+        val result = blockchainRelayService.validateGasLimits(mockTx)
 
         assertFalse(result.success)
         assertNotNull(result.error)
@@ -871,7 +869,7 @@ class BlockchainRelayServiceTest {
         whenever(estimateResponse.hasError()).thenReturn(false)
         whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
 
-        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+        val result = blockchainRelayService.validateGasLimits(mockTx)
 
         assertFalse(result.success)
         assertNotNull(result.error)
@@ -896,7 +894,7 @@ class BlockchainRelayServiceTest {
         whenever(estimateResponse.error).thenReturn(error)
         whenever(error.message).thenReturn("Execution reverted")
 
-        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+        val result = blockchainRelayService.validateGasLimits(mockTx)
 
         assertFalse(result.success)
         assertNotNull(result.error)

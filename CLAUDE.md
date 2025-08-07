@@ -26,7 +26,7 @@ The utility implements a plugin architecture where:
 ### Transaction Flow
 
 1. **Transaction Decoding**: Decodes user's signed transaction to extract gas limit, value, and contract data
-2. **Gas Validation**: Calls `ethEstimateGas` on-chain to validate user's gas limit is reasonable (within tolerance)
+2. **Gas Validation**: Validates user's gas limits and prices against configured maximum thresholds
 3. **Balance Check & Funding**: Checks user's AVAX balance and transfers exact amount needed if insufficient
 4. **Transaction Forwarding**: Forwards original signed transaction unchanged to the blockchain
 5. **Receipt Waiting**: Monitors transaction status and provides success/failure results
@@ -74,8 +74,9 @@ blockchain:
   gas:
     price-multiplier: 1.2  # Multiply network gas price by this factor (default: 1.2)
     minimum-gas-price-wei: 6  # Minimum gas price in wei (default: 6)
-    validation-tolerance-percent: 50  # Allow up to 50% more gas than estimate (default: 50)
     max-gas-cost-wei: 540000000  # Maximum total cost gasLimit*gasPrice in wei (default: ~$0.014)
+    max-gas-limit: 1000000  # Maximum gas limit allowed (default: 1M)
+    max-gas-price-multiplier: 3  # Maximum gas price as multiplier of current network price (default: 3x)
 
 auth:
   user-service-url: "${USER_SERVICE_URL}"
@@ -85,11 +86,11 @@ auth:
 ## Key Features
 
 ### Gas Management
-- **Security-First Gas Validation**: Validates user-provided gas limits against on-chain estimates before funding
+- **Security-First Gas Validation**: Validates user-provided gas limits and prices against configurable maximum thresholds
 - Extracts exact gas costs from user-signed transactions (supports both legacy and EIP-1559)
 - Automatically transfers AVAX to user wallets before transaction execution
 - Only transfers the exact amount needed (gas cost + transaction value - current balance)
-- Configurable tolerance threshold prevents excessive gas limit abuse
+- Three-tier validation: total cost limit, maximum gas limit, and maximum gas price multiplier
 
 ### Authentication System
 - Pluggable authentication via `AuthenticationProvider` interface
