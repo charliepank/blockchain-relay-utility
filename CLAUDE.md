@@ -25,23 +25,34 @@ The utility implements a plugin architecture where:
 
 ### Transaction Flow
 
-1. **Gas Management**: Automatically calculates exact gas costs from user-signed transactions and transfers AVAX to user wallets if insufficient balance
-2. **Transaction Forwarding**: Forwards original signed transactions unchanged to the blockchain
-3. **Receipt Waiting**: Monitors transaction status and provides success/failure results
+1. **Transaction Decoding**: Decodes user's signed transaction to extract gas limit, value, and contract data
+2. **Gas Validation**: Calls `ethEstimateGas` on-chain to validate user's gas limit is reasonable (within tolerance)
+3. **Balance Check & Funding**: Checks user's AVAX balance and transfers exact amount needed if insufficient
+4. **Transaction Forwarding**: Forwards original signed transaction unchanged to the blockchain
+5. **Receipt Waiting**: Monitors transaction status and provides success/failure results
 
 ## Development Commands
 
 ### Build and Test
 ```bash
-./gradlew build                    # Build project
-./gradlew test                     # Run tests
-./gradlew bootRun                 # Run Spring Boot application
+./gradlew build                    # Build project with tests and jar
+./gradlew test                     # Run tests only
+./gradlew test jacocoTestReport   # Run tests with coverage report
+./gradlew bootRun                 # Run Spring Boot application (library mode)
 ./gradlew clean                   # Clean build directory
 ```
 
-### Publishing
+### Single Test Execution
+```bash
+./gradlew test --tests "com.utility.chainservice.BlockchainRelayServiceTest"
+./gradlew test --tests "*RelayServiceTest*"
+./gradlew test --tests "*.shouldCalculateOperationGasCosts*"
+```
+
+### Publishing and Distribution
 ```bash
 ./gradlew publishToMavenLocal     # Publish to local Maven repository
+./gradlew jar                     # Create JAR artifact (bootJar disabled)
 ```
 
 ## Configuration
@@ -61,8 +72,10 @@ blockchain:
     private-key: "${RELAYER_PRIVATE_KEY}"
     wallet-address: "${RELAYER_WALLET_ADDRESS}"
   gas:
-    price-multiplier: 1.2  # Multiply network gas price by this factor
-    minimum-gas-price-wei: 6  # Minimum gas price in wei
+    price-multiplier: 1.2  # Multiply network gas price by this factor (default: 1.2)
+    minimum-gas-price-wei: 6  # Minimum gas price in wei (default: 6)
+    validation-tolerance-percent: 50  # Allow up to 50% more gas than estimate (default: 50)
+    max-gas-cost-wei: 540000000  # Maximum total cost gasLimit*gasPrice in wei (default: ~$0.014)
 
 auth:
   user-service-url: "${USER_SERVICE_URL}"
@@ -72,9 +85,11 @@ auth:
 ## Key Features
 
 ### Gas Management
+- **Security-First Gas Validation**: Validates user-provided gas limits against on-chain estimates before funding
 - Extracts exact gas costs from user-signed transactions (supports both legacy and EIP-1559)
 - Automatically transfers AVAX to user wallets before transaction execution
 - Only transfers the exact amount needed (gas cost + transaction value - current balance)
+- Configurable tolerance threshold prevents excessive gas limit abuse
 
 ### Authentication System
 - Pluggable authentication via `AuthenticationProvider` interface
@@ -97,10 +112,23 @@ To create a plugin:
 
 ## Testing
 
+### Test Configuration
 - Test configuration in `src/test/resources/application-test.yml`
 - Uses Avalanche Fuji testnet (chain ID 43113) for testing
-- Mock authentication disabled in test environment
-- Tests use JUnit 5 with Mockito Kotlin
+- Mock authentication disabled in test environment (`auth.enabled: false`)
+- Debug logging enabled for `com.utility.chainservice` package
+
+### Testing Framework
+- **JUnit 5** with `@Test` annotations
+- **Mockito Kotlin** for mocking with `mock()`, `whenever()`, `verify()`
+- **Coroutines Testing** with `runBlocking` for suspend functions
+- **Spring Boot Test** with `@SpringBootTest` for integration tests
+
+### Test Patterns
+- **Suspend Function Testing**: Use `runBlocking { }` to test suspend methods
+- **Web3j Mocking**: Mock `Request<*, ResponseType>` objects and their `.send()` methods
+- **Exception Testing**: Test error scenarios with `assertFalse(result.success)` and `assertNotNull(result.error)`
+- **Coverage Reports**: Generated in `build/reports/jacoco/test/html/index.html`
 
 ## Library Usage
 
@@ -111,3 +139,10 @@ This project is designed to be used as a dependency in other Spring Boot applica
 3. Implement business-specific plugins by extending `BlockchainServicePlugin`
 4. Enable component scanning for `com.utility.chainservice` package
 5. Create REST controllers that utilize the initialized plugins
+
+### Important Implementation Notes
+- This is a **library project** (not standalone application) - `bootJar` is disabled, `jar` is enabled
+- Uses **Spring Boot auto-configuration** via `UtilityAutoConfiguration.kt`
+- **Plugin auto-discovery** happens through Spring component scanning
+- All blockchain operations are **suspend functions** requiring coroutines support
+- **JitPack publishing** is configured for easy distribution as GitHub dependency

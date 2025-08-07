@@ -44,7 +44,12 @@ class BlockchainRelayServiceTest {
         whenever(ecKeyPair.privateKey).thenReturn(BigInteger.valueOf(987654321L))
         whenever(credentials.ecKeyPair).thenReturn(ecKeyPair)
         
-        blockchainRelayService = BlockchainRelayService(web3j, credentials, gasProvider, chainId)
+        val blockchainProperties = BlockchainProperties().apply {
+            gas = GasProperties().apply {
+                validationTolerancePercent = 50
+            }
+        }
+        blockchainRelayService = BlockchainRelayService(web3j, credentials, gasProvider, chainId, blockchainProperties)
     }
 
     @Test
@@ -803,5 +808,98 @@ class BlockchainRelayServiceTest {
             assertNull(result.transactionHash, "Should have null hash for: $description")
             assertNotNull(result.error, "Should have error for: $description")
         }
+    }
+
+    @Test
+    fun `should validate gas limit successfully when within tolerance`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.value).thenReturn(BigInteger.ZERO)
+        whenever(mockTx.data).thenReturn("0x")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(25000)) // 25k gas provided
+        
+        // Mock gas estimation to return 20k (within 50% tolerance)
+        val estimateRequest = mock<Request<*, org.web3j.protocol.core.methods.response.EthEstimateGas>>()
+        val estimateResponse = mock<org.web3j.protocol.core.methods.response.EthEstimateGas>()
+        whenever(web3j.ethEstimateGas(any())).thenReturn(estimateRequest)
+        whenever(estimateRequest.send()).thenReturn(estimateResponse)
+        whenever(estimateResponse.hasError()).thenReturn(false)
+        whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
+
+        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+
+        assertTrue(result.success)
+        assertNull(result.error)
+    }
+
+    @Test
+    fun `should reject gas limit when exceeding tolerance`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.value).thenReturn(BigInteger.ZERO)
+        whenever(mockTx.data).thenReturn("0x")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(40000)) // 40k gas provided
+        
+        // Mock gas estimation to return 20k (40k > 30k max allowed with 50% tolerance)
+        val estimateRequest = mock<Request<*, org.web3j.protocol.core.methods.response.EthEstimateGas>>()
+        val estimateResponse = mock<org.web3j.protocol.core.methods.response.EthEstimateGas>()
+        whenever(web3j.ethEstimateGas(any())).thenReturn(estimateRequest)
+        whenever(estimateRequest.send()).thenReturn(estimateResponse)
+        whenever(estimateResponse.hasError()).thenReturn(false)
+        whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
+
+        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+
+        assertFalse(result.success)
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Gas limit too high"))
+    }
+
+    @Test
+    fun `should reject gas limit when below estimated requirement`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.value).thenReturn(BigInteger.ZERO)
+        whenever(mockTx.data).thenReturn("0x")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(15000)) // 15k gas provided
+        
+        // Mock gas estimation to return 20k (15k < 20k required)
+        val estimateRequest = mock<Request<*, org.web3j.protocol.core.methods.response.EthEstimateGas>>()
+        val estimateResponse = mock<org.web3j.protocol.core.methods.response.EthEstimateGas>()
+        whenever(web3j.ethEstimateGas(any())).thenReturn(estimateRequest)
+        whenever(estimateRequest.send()).thenReturn(estimateResponse)
+        whenever(estimateResponse.hasError()).thenReturn(false)
+        whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
+
+        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+
+        assertFalse(result.success)
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Gas limit too low"))
+    }
+
+    @Test
+    fun `should handle gas estimation API failure`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.value).thenReturn(BigInteger.ZERO)
+        whenever(mockTx.data).thenReturn("0x")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(25000))
+        
+        // Mock gas estimation failure
+        val estimateRequest = mock<Request<*, org.web3j.protocol.core.methods.response.EthEstimateGas>>()
+        val estimateResponse = mock<org.web3j.protocol.core.methods.response.EthEstimateGas>()
+        val error = mock<org.web3j.protocol.core.Response.Error>()
+        whenever(web3j.ethEstimateGas(any())).thenReturn(estimateRequest)
+        whenever(estimateRequest.send()).thenReturn(estimateResponse)
+        whenever(estimateResponse.hasError()).thenReturn(true)
+        whenever(estimateResponse.error).thenReturn(error)
+        whenever(error.message).thenReturn("Execution reverted")
+
+        val result = blockchainRelayService.validateGasLimit(mockTx, 50)
+
+        assertFalse(result.success)
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Gas estimation failed"))
     }
 }
