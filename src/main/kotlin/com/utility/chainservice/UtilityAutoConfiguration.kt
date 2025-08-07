@@ -29,8 +29,9 @@ data class RelayerProperties(
 data class GasProperties(
     var priceMultiplier: Double = 1.2,  // Default: 120% of network gas price
     var minimumGasPriceWei: Long = 6,   // Default: 6 wei minimum
-    var validationTolerancePercent: Int = 50,  // Default: 50% above estimate allowed
-    var maxGasCostWei: Long = 540_000_000  // Default: ~$0.014 USD max total cost
+    var maxGasCostWei: Long = 540_000_000,  // Default: ~$0.014 USD max total cost
+    var maxGasLimit: Long = 1_000_000,      // Default: 1M gas limit maximum
+    var maxGasPriceMultiplier: Int = 3      // Default: 3x current network gas price maximum
 )
 
 @ConfigurationProperties(prefix = "auth")

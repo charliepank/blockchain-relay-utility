@@ -108,8 +108,8 @@ class BlockchainRelayService(
             // Extract exact transaction cost from user's signed transaction
             val decodedTx = TransactionDecoder.decode(signedTransactionHex)
             
-            // SECURITY: Validate gas limit against on-chain estimation before funding
-            val gasValidationResult = validateGasLimit(decodedTx, blockchainProperties.gas.validationTolerancePercent)
+            // SECURITY: Validate gas limits against maximum allowed costs before funding
+            val gasValidationResult = validateGasLimits(decodedTx)
             if (!gasValidationResult.success) {
                 logger.error("Gas validation failed: ${gasValidationResult.error}")
                 return TransactionResult(
@@ -325,33 +325,10 @@ class BlockchainRelayService(
         return avaxDecimal.stripTrailingZeros().toPlainString()
     }
 
-    suspend fun validateGasLimit(decodedTx: RawTransaction, maxTolerancePercent: Int = 50): TransactionResult {
+    suspend fun validateGasLimits(decodedTx: RawTransaction): TransactionResult {
         return try {
-            logger.debug("Validating gas limit for transaction to: ${decodedTx.to}")
+            logger.debug("Validating gas limits for transaction to: ${decodedTx.to}")
             
-            // Create Transaction object for gas estimation
-            val transaction = Transaction.createFunctionCallTransaction(
-                relayerCredentials.address,  // Use relayer as from address for estimation
-                null,                        // nonce not needed for estimation
-                null,                        // gasPrice not needed for estimation  
-                null,                        // gasLimit will be estimated
-                decodedTx.to,
-                decodedTx.value,
-                decodedTx.data
-            )
-
-            // Get on-chain gas estimate
-            val estimateResponse = web3j.ethEstimateGas(transaction).send()
-            if (estimateResponse.hasError()) {
-                logger.error("Gas estimation failed: ${estimateResponse.error.message}")
-                return TransactionResult(
-                    success = false,
-                    transactionHash = null,
-                    error = "Gas estimation failed: ${estimateResponse.error.message}"
-                )
-            }
-
-            val estimatedGas = estimateResponse.amountUsed
             val userProvidedGas = decodedTx.gasLimit
             
             // Get user's gas price from transaction
@@ -367,16 +344,18 @@ class BlockchainRelayService(
                 }
             }
             
-            // Calculate total cost limit
+            // Calculate total cost and check against maximum
             val totalCost = userProvidedGas.multiply(userGasPrice)
             val maxAllowedCost = BigInteger.valueOf(blockchainProperties.gas.maxGasCostWei)
+            val maxGasLimit = BigInteger.valueOf(blockchainProperties.gas.maxGasLimit)
             
-            // Calculate tolerance - allow user to provide up to X% more gas than estimated
-            val maxAllowedGas = estimatedGas.multiply(BigInteger.valueOf(100 + maxTolerancePercent.toLong())).divide(BigInteger.valueOf(100))
+            // Get current network gas price for comparison
+            val currentNetworkGasPrice = web3j.ethGasPrice().send().gasPrice
+            val maxAllowedGasPrice = currentNetworkGasPrice.multiply(BigInteger.valueOf(blockchainProperties.gas.maxGasPriceMultiplier.toLong()))
             
-            logger.info("Gas validation: estimated=$estimatedGas, userProvided=$userProvidedGas, maxAllowed=$maxAllowedGas, totalCost=$totalCost, maxCost=$maxAllowedCost")
+            logger.info("Gas validation: userGasLimit=$userProvidedGas, maxGasLimit=$maxGasLimit, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
 
-            // Check total cost first (hard limit)
+            // Check total cost first (hard limit to prevent economic attack)
             if (totalCost > maxAllowedCost) {
                 logger.warn("Transaction exceeds maximum cost: $totalCost > $maxAllowedCost wei")
                 return TransactionResult(
@@ -386,29 +365,31 @@ class BlockchainRelayService(
                 )
             }
 
-            if (userProvidedGas > maxAllowedGas) {
-                logger.warn("User provided excessive gas limit: $userProvidedGas > $maxAllowedGas (${maxTolerancePercent}% tolerance)")
+            // Check gas limit (prevent excessive gas usage)
+            if (userProvidedGas > maxGasLimit) {
+                logger.warn("User provided excessive gas limit: $userProvidedGas > $maxGasLimit")
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = "Gas limit too high: provided $userProvidedGas, maximum allowed $maxAllowedGas (estimated: $estimatedGas)"
+                    error = "Gas limit too high: provided $userProvidedGas, maximum allowed $maxGasLimit"
                 )
             }
 
-            if (userProvidedGas < estimatedGas) {
-                logger.warn("User provided insufficient gas limit: $userProvidedGas < $estimatedGas")
+            // Check gas price (prevent paying excessive gas prices)
+            if (userGasPrice > maxAllowedGasPrice) {
+                logger.warn("User provided excessive gas price: $userGasPrice > $maxAllowedGasPrice")
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = "Gas limit too low: provided $userProvidedGas, minimum required $estimatedGas"
+                    error = "Gas price too high: provided $userGasPrice, maximum allowed $maxAllowedGasPrice (current network: $currentNetworkGasPrice)"
                 )
             }
 
-            logger.debug("Gas limit validation passed")
+            logger.debug("Gas limits validation passed")
             TransactionResult(success = true, transactionHash = null)
             
         } catch (e: Exception) {
-            logger.error("Error validating gas limit", e)
+            logger.error("Error validating gas limits", e)
             TransactionResult(
                 success = false,
                 transactionHash = null,

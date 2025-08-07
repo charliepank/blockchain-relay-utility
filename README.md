@@ -122,8 +122,11 @@ blockchain:
     privateKey: "0x..." # Your relayer wallet private key
     walletAddress: "0x..." # Your relayer wallet address
   gas:
-    priceMultiplier: 1.2
-    minimumGasPriceWei: 6
+    priceMultiplier: 1.2           # Gas price multiplier for relayer transactions
+    minimumGasPriceWei: 6          # Minimum gas price in wei
+    maxGasCostWei: 540000000       # Maximum total cost per transaction (security limit)
+    maxGasLimit: 1000000           # Maximum gas limit per transaction 
+    maxGasPriceMultiplier: 3       # Maximum gas price (3x current network price)
 
 auth:
   userServiceUrl: "https://your-user-service.com"
@@ -340,10 +343,21 @@ class CustomAuthProvider : AuthenticationProvider {
 ## Gas Management
 
 The utility automatically:
-1. Calculates exact gas costs from user-signed transactions
-2. Transfers AVAX to user wallets if insufficient balance
-3. Forwards original signed transactions unchanged
-4. Handles both legacy and EIP-1559 transactions
+1. **Validates gas limits** - Prevents economic attacks by checking gas limits and costs against configurable maximums
+2. **Calculates exact gas costs** from user-signed transactions  
+3. **Transfers AVAX** to user wallets if insufficient balance
+4. **Forwards original signed transactions** unchanged
+5. **Handles both transaction types** - Legacy and EIP-1559 transactions
+
+### Gas Validation Security
+
+The utility protects against economic attacks by validating:
+- **Maximum total cost** - Prevents draining the relayer wallet with expensive transactions
+- **Maximum gas limit** - Prevents excessive gas usage
+- **Maximum gas price** - Prevents paying unreasonable gas prices (based on current network price)
+
+**Why not gas estimation?** 
+Many smart contracts have access controls (e.g., "only buyer can call"), making gas estimation impossible since the relayer wallet can't execute the user's transaction for estimation. Instead, the utility uses configurable limits to prevent abuse while trusting that modern wallets provide reasonable gas estimates.
 
 ## Core API Methods
 
