@@ -31,8 +31,13 @@ class MyController(
     @PostMapping("/submit")
     fun submit(@RequestBody request: Request): ResponseEntity<Response> {
         // IMPORTANT: Use runBlocking for suspend functions
+        // Use processTransactionWithGasTransfer for user-signed transactions
         val result = runBlocking {
-            blockchainService.relayTransaction(request.signedTransactionHex)
+            blockchainService.processTransactionWithGasTransfer(
+                userWalletAddress = request.userAddress,
+                signedTransactionHex = request.signedTransactionHex,
+                fallbackGasOperation = "submit"
+            )
         }
         
         return ResponseEntity.ok(Response(
@@ -56,7 +61,7 @@ private lateinit var blockchainService: BlockchainRelayService
 fun testSubmit() {
     // Mock suspend functions with coEvery
     coEvery { 
-        blockchainService.relayTransaction(any()) 
+        blockchainService.processTransactionWithGasTransfer(any(), any(), any()) 
     } returns TransactionResult(
         success = true,
         transactionHash = "0x123...",
@@ -189,8 +194,13 @@ class MyServiceController(
     fun submitTransaction(@RequestBody request: TransactionRequest): ResponseEntity<TransactionResponse> {
         // IMPORTANT: BlockchainRelayService methods are suspend functions
         // Use runBlocking to call them from non-suspend contexts
+        // Use processTransactionWithGasTransfer for user-signed transactions
         val result = runBlocking {
-            blockchainService.relayTransaction(request.signedTransactionHex)
+            blockchainService.processTransactionWithGasTransfer(
+                userWalletAddress = request.userAddress,
+                signedTransactionHex = request.signedTransactionHex,
+                fallbackGasOperation = "submitTransaction"
+            )
         }
         
         return ResponseEntity.ok(TransactionResponse(
@@ -365,22 +375,14 @@ Many smart contracts have access controls (e.g., "only buyer can call"), making 
 
 The `BlockchainRelayService` provides the following suspend functions for transaction processing:
 
-#### relayTransaction
-```kotlin
-suspend fun relayTransaction(signedTransactionHex: String): TransactionResult
-```
-Relays a pre-signed transaction to the blockchain. The transaction is sent as-is without modification.
+#### ⚠️ IMPORTANT: Method Selection Guide
 
-**Usage:**
-```kotlin
-import kotlinx.coroutines.runBlocking
+**Choose the RIGHT method for your use case:**
 
-val result = runBlocking {
-    blockchainService.relayTransaction(signedTxHex)
-}
-```
+- **Use `processTransactionWithGasTransfer()`** - ✅ **RECOMMENDED** for user-signed transactions that need gas funding
+- **Use `relayTransaction()`** - ⚠️ **ONLY** for relayer-owned transactions or when you want to reconstruct the transaction
 
-#### processTransactionWithGasTransfer
+#### processTransactionWithGasTransfer() - ✅ RECOMMENDED
 ```kotlin
 suspend fun processTransactionWithGasTransfer(
     userWalletAddress: String, 
@@ -388,18 +390,62 @@ suspend fun processTransactionWithGasTransfer(
     fallbackGasOperation: String
 ): TransactionResult
 ```
-Checks user's gas balance and transfers gas if needed before relaying the transaction.
+
+**What it does:**
+- ✅ **Preserves the user's original signature** - forwards transaction unchanged
+- ✅ **Validates gas limits** to prevent economic attacks  
+- ✅ **Transfers exact AVAX needed** to user's wallet if balance is insufficient
+- ✅ **Forwards original signed transaction** unchanged to blockchain
+- ✅ **Works with user-signed transactions** from wallets like MetaMask
+
+**Use this when:** User signs a transaction client-side and you need to fund their gas costs.
 
 **Usage:**
 ```kotlin
 val result = runBlocking {
     blockchainService.processTransactionWithGasTransfer(
         userWalletAddress = "0x...",
-        signedTransactionHex = "0xf86c...",
+        signedTransactionHex = "0xf86c...", // User's original signed transaction
         fallbackGasOperation = "defaultOperation"
     )
 }
 ```
+
+#### relayTransaction() - ⚠️ DANGEROUS for User Transactions
+```kotlin
+suspend fun relayTransaction(signedTransactionHex: String): TransactionResult
+```
+
+**What it does:**
+- ❌ **RECONSTRUCTS the transaction** with relayer's credentials (nonce, gas, signature)
+- ❌ **INVALIDATES the original user signature**
+- ❌ **CHANGES the transaction sender** to the relayer wallet
+- ⚠️ **Only works if relayer is authorized** to execute the transaction
+
+**Use this ONLY when:** 
+- The relayer wallet owns/controls the transaction
+- You want to reconstruct a transaction template with relayer credentials
+- **NEVER use for user-signed transactions from wallets**
+
+**Common Mistake:**
+```kotlin
+// ❌ WRONG - This will fail for user-signed transactions!
+// The user signed with their address, but relayer reconstructs with relayer address
+val result = runBlocking {
+    blockchainService.relayTransaction(userSignedTxHex) // Will likely fail!
+}
+
+// ✅ CORRECT - Use this for user-signed transactions
+val result = runBlocking {
+    blockchainService.processTransactionWithGasTransfer(
+        userWalletAddress = userAddress,
+        signedTransactionHex = userSignedTxHex,
+        fallbackGasOperation = "defaultOperation"
+    )
+}
+```
+
+**Why this matters:** Smart contracts often have access controls like "only buyer can claim" or "only token owner can transfer". When `relayTransaction()` reconstructs the transaction with the relayer's address, these access controls will reject the transaction because the relayer is not the authorized user.
 
 ### Important: Suspend Functions and Coroutines
 
