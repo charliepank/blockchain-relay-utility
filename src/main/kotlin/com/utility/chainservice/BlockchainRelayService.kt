@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.RawTransaction
+import org.web3j.crypto.SignedRawTransaction
 import org.web3j.crypto.TransactionDecoder
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
@@ -32,7 +33,8 @@ class BlockchainRelayService(
         return try {
             logger.info("Relaying transaction: ${signedTransactionHex.substring(0, 20)}...")
 
-            val decodedTx = TransactionDecoder.decode(signedTransactionHex)
+            val txInfo = decodeTransactionWithSender(signedTransactionHex, "")
+            val decodedTx = txInfo.transaction
             
             val nonce = web3j.ethGetTransactionCount(
                 relayerCredentials.address,
@@ -105,8 +107,10 @@ class BlockchainRelayService(
         return try {
             logger.info("Processing transaction with gas transfer for user: $userWalletAddress")
 
-            // Extract exact transaction cost from user's signed transaction
-            val decodedTx = TransactionDecoder.decode(signedTransactionHex)
+            // Extract transaction details and sender address in one operation
+            val txInfo = decodeTransactionWithSender(signedTransactionHex, userWalletAddress)
+            val decodedTx = txInfo.transaction
+            val actualWalletAddress = txInfo.senderAddress
             
             // SECURITY: Validate gas limits against maximum allowed costs before funding
             val gasValidationResult = validateGasLimits(decodedTx)
@@ -146,14 +150,14 @@ class BlockchainRelayService(
             logger.info("Transaction requires: gasLimit=$userGasLimit, gasCost=$gasCost wei, transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
 
             // Check user's current AVAX balance
-            val currentBalance = web3j.ethGetBalance(userWalletAddress, DefaultBlockParameterName.LATEST).send().balance
+            val currentBalance = web3j.ethGetBalance(actualWalletAddress, DefaultBlockParameterName.LATEST).send().balance
             
             // Only transfer if user doesn't have enough for the entire transaction
             if (currentBalance < totalAmountNeeded) {
                 val amountNeeded = totalAmountNeeded.subtract(currentBalance)
                 logger.info("User has $currentBalance wei, needs $totalAmountNeeded wei, transferring $amountNeeded wei")
                 
-                val gasTransferResult = transferGasToUser(userWalletAddress, amountNeeded)
+                val gasTransferResult = transferGasToUser(actualWalletAddress, amountNeeded)
                 if (!gasTransferResult.success) {
                     logger.error("Failed to transfer gas to user: ${gasTransferResult.error}")
                     return TransactionResult(
@@ -323,6 +327,22 @@ class BlockchainRelayService(
         val weiDecimal = BigDecimal(wei)
         val avaxDecimal = weiDecimal.divide(BigDecimal("1000000000000000000"), 18, RoundingMode.HALF_UP)
         return avaxDecimal.stripTrailingZeros().toPlainString()
+    }
+
+    data class DecodedTransactionInfo(
+        val transaction: RawTransaction,
+        val senderAddress: String
+    )
+
+    private fun decodeTransactionWithSender(signedTransactionHex: String, fallbackAddress: String): DecodedTransactionInfo {
+        val decodedTx = TransactionDecoder.decode(signedTransactionHex)
+        val senderAddress = try {
+            (decodedTx as SignedRawTransaction).from
+        } catch (e: Exception) {
+            logger.warn("Could not extract wallet address from signed transaction, using fallback address")
+            fallbackAddress
+        }
+        return DecodedTransactionInfo(decodedTx, senderAddress)
     }
 
     suspend fun validateGasLimits(decodedTx: RawTransaction): TransactionResult {
