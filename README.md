@@ -2,6 +2,69 @@
 
 A generic Kotlin/Spring Boot utility for blockchain transaction relaying with gas management and pluggable business logic.
 
+## Quick Reference for Integration
+
+### Essential Dependencies
+```kotlin
+// build.gradle.kts
+repositories {
+    mavenCentral()
+    maven { url = uri("https://jitpack.io") }
+}
+
+dependencies {
+    implementation("com.github.charliepank:blockchain-relay-utility:v0.0.11")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")  // REQUIRED!
+}
+```
+
+### Basic Controller Example
+```kotlin
+import com.utility.chainservice.BlockchainRelayService
+import com.utility.chainservice.models.TransactionResult  // Note: .models package!
+import kotlinx.coroutines.runBlocking  // For calling suspend functions
+
+@RestController
+class MyController(
+    private val blockchainService: BlockchainRelayService  // Auto-injected
+) {
+    @PostMapping("/submit")
+    fun submit(@RequestBody request: Request): ResponseEntity<Response> {
+        // IMPORTANT: Use runBlocking for suspend functions
+        val result = runBlocking {
+            blockchainService.relayTransaction(request.signedTransactionHex)
+        }
+        
+        return ResponseEntity.ok(Response(
+            success = result.success,
+            transactionHash = result.transactionHash,
+            message = result.error ?: "Success"
+        ))
+    }
+}
+```
+
+### Test Mocking Example
+```kotlin
+import io.mockk.coEvery  // Use coEvery, not every!
+import com.utility.chainservice.models.TransactionResult
+
+@MockkBean
+private lateinit var blockchainService: BlockchainRelayService
+
+@Test
+fun testSubmit() {
+    // Mock suspend functions with coEvery
+    coEvery { 
+        blockchainService.relayTransaction(any()) 
+    } returns TransactionResult(
+        success = true,
+        transactionHash = "0x123...",
+        error = null
+    )
+}
+```
+
 ## Features
 
 - **Generic Transaction Relaying**: Core blockchain interaction and transaction forwarding
@@ -26,9 +89,12 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.charliep:blockchain-relay-utility:main-SNAPSHOT")
-    // Or use a specific release tag:
-    // implementation("com.github.charliep:blockchain-relay-utility:v1.0.0")
+    implementation("com.github.charliepank:blockchain-relay-utility:v0.0.11")
+    // Or use latest:
+    // implementation("com.github.charliepank:blockchain-relay-utility:main-SNAPSHOT")
+    
+    // Required: Coroutines for suspend functions
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     
     // Add your Web3j and Spring Boot dependencies
 }
@@ -104,22 +170,40 @@ class MyServicePlugin : BlockchainServicePlugin {
 ### 4. Create Your Controller
 
 ```kotlin
+import com.utility.chainservice.BlockchainRelayService
+import com.utility.chainservice.models.TransactionResult
+import kotlinx.coroutines.runBlocking
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/my-service")
 class MyServiceController(
-    private val myServicePlugin: MyServicePlugin
+    private val blockchainService: BlockchainRelayService  // Injected automatically
 ) {
     
-    @PostMapping("/my-operation")
-    fun myOperation(@RequestBody request: MyRequest): ResponseEntity<MyResponse> {
-        // Use myServicePlugin.getRelayService() for blockchain operations
-        // Use myServicePlugin.getAuthProvider() for authentication
+    @PostMapping("/submit-transaction")
+    fun submitTransaction(@RequestBody request: TransactionRequest): ResponseEntity<TransactionResponse> {
+        // IMPORTANT: BlockchainRelayService methods are suspend functions
+        // Use runBlocking to call them from non-suspend contexts
+        val result = runBlocking {
+            blockchainService.relayTransaction(request.signedTransactionHex)
+        }
+        
+        return ResponseEntity.ok(TransactionResponse(
+            success = result.success,
+            transactionHash = result.transactionHash,
+            message = result.error ?: "Transaction processed successfully"
+        ))
     }
 }
 ```
+
+**Important Notes:**
+- `BlockchainRelayService` is auto-configured and can be injected directly
+- All transaction methods (`relayTransaction`, `processTransactionWithGasTransfer`) are **suspend functions**
+- Use `runBlocking { }` to call suspend functions from regular Spring controllers
+- Import `com.utility.chainservice.models.TransactionResult` (not `com.utility.chainservice.TransactionResult`)
 
 ### 5. Enable Component Scan
 
@@ -261,6 +345,81 @@ The utility automatically:
 3. Forwards original signed transactions unchanged
 4. Handles both legacy and EIP-1559 transactions
 
+## Core API Methods
+
+### BlockchainRelayService
+
+The `BlockchainRelayService` provides the following suspend functions for transaction processing:
+
+#### relayTransaction
+```kotlin
+suspend fun relayTransaction(signedTransactionHex: String): TransactionResult
+```
+Relays a pre-signed transaction to the blockchain. The transaction is sent as-is without modification.
+
+**Usage:**
+```kotlin
+import kotlinx.coroutines.runBlocking
+
+val result = runBlocking {
+    blockchainService.relayTransaction(signedTxHex)
+}
+```
+
+#### processTransactionWithGasTransfer
+```kotlin
+suspend fun processTransactionWithGasTransfer(
+    userWalletAddress: String, 
+    signedTransactionHex: String,
+    fallbackGasOperation: String
+): TransactionResult
+```
+Checks user's gas balance and transfers gas if needed before relaying the transaction.
+
+**Usage:**
+```kotlin
+val result = runBlocking {
+    blockchainService.processTransactionWithGasTransfer(
+        userWalletAddress = "0x...",
+        signedTransactionHex = "0xf86c...",
+        fallbackGasOperation = "defaultOperation"
+    )
+}
+```
+
+### Important: Suspend Functions and Coroutines
+
+**All `BlockchainRelayService` methods are suspend functions**, which means:
+
+1. **In Controllers**: Use `runBlocking` to call from regular Spring methods:
+```kotlin
+@PostMapping("/submit")
+fun submit(@RequestBody request: Request): ResponseEntity<Response> {
+    val result = runBlocking {
+        blockchainService.relayTransaction(request.hex)
+    }
+    // ...
+}
+```
+
+2. **In Tests**: Use `coEvery` for mocking:
+```kotlin
+import io.mockk.coEvery
+
+coEvery { 
+    blockchainService.relayTransaction(any()) 
+} returns TransactionResult(
+    success = true,
+    transactionHash = "0x123...",
+    error = null
+)
+```
+
+3. **Required Dependency**: Add kotlinx-coroutines to your build.gradle.kts:
+```kotlin
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+```
+
 ## API Response Models
 
 ### TransactionResult
@@ -268,11 +427,11 @@ The utility automatically:
 The `TransactionResult` model is returned by transaction relay operations:
 
 ```kotlin
+// Import path: com.utility.chainservice.models.TransactionResult
 data class TransactionResult(
     val success: Boolean,           // Whether the transaction was successful
     val transactionHash: String?,   // Transaction hash if successful
-    val error: String? = null,      // Error message if failed
-    val contractAddress: String? = null  // Target contract address (the 'to' field from the transaction)
+    val error: String? = null       // Error message if failed
 )
 ```
 
@@ -476,7 +635,57 @@ my-service:
 
 ### Common Issues and Solutions
 
-#### 1. Ambiguous Mapping Errors
+#### 1. Suspend Function Compilation Errors
+```
+e: Suspend function 'relayTransaction' should be called only from a coroutine or another suspend function
+e: Unresolved reference: runBlocking
+```
+
+**Cause**: Missing coroutines dependency or incorrect usage of suspend functions.
+
+**Solution**: 
+1. Add kotlinx-coroutines dependency:
+```kotlin
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+```
+2. Import and use `runBlocking`:
+```kotlin
+import kotlinx.coroutines.runBlocking
+
+val result = runBlocking {
+    blockchainService.relayTransaction(hex)
+}
+```
+
+#### 2. Incorrect TransactionResult Import
+```
+e: Unresolved reference: TransactionResult
+```
+
+**Cause**: Importing from wrong package path.
+
+**Solution**: Use the correct import:
+```kotlin
+import com.utility.chainservice.models.TransactionResult  // ✅ Correct
+// NOT: import com.utility.chainservice.TransactionResult  // ❌ Wrong
+```
+
+#### 3. Test Mocking Errors with Suspend Functions
+```
+e: Suspend function 'relayTransaction' should be called only from a coroutine
+```
+
+**Cause**: Using `every` instead of `coEvery` for mocking suspend functions.
+
+**Solution**: Use `coEvery` from MockK:
+```kotlin
+import io.mockk.coEvery
+
+coEvery { blockchainService.relayTransaction(any()) } returns result  // ✅ Correct
+// NOT: every { blockchainService.relayTransaction(any()) } returns result  // ❌ Wrong
+```
+
+#### 4. Ambiguous Mapping Errors
 ```
 Ambiguous mapping. Cannot map 'myController' method to {POST [/api/chain/operation]}: 
 There is already 'pluginController' bean method mapped.
