@@ -247,7 +247,7 @@ class BlockchainRelayServiceTest {
         val invalidSignedTxHex = "0xinvalid"
         val fallbackGasOperation = "transfer"
 
-        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, invalidSignedTxHex, fallbackGasOperation)
+        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, invalidSignedTxHex, fallbackGasOperation, BigInteger.ZERO)
 
         assertFalse(result.success)
         assertNull(result.transactionHash)
@@ -260,7 +260,7 @@ class BlockchainRelayServiceTest {
         val emptySignedTxHex = ""
         val fallbackGasOperation = "transfer"
 
-        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, emptySignedTxHex, fallbackGasOperation)
+        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, emptySignedTxHex, fallbackGasOperation, BigInteger.ZERO)
 
         assertFalse(result.success)
         assertNull(result.transactionHash)
@@ -273,7 +273,7 @@ class BlockchainRelayServiceTest {
         val minimalHex = "0x00"
         val fallbackGasOperation = "transfer"
 
-        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, minimalHex, fallbackGasOperation)
+        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, minimalHex, fallbackGasOperation, BigInteger.ZERO)
 
         assertFalse(result.success)
         assertNull(result.transactionHash)
@@ -525,7 +525,7 @@ class BlockchainRelayServiceTest {
         val userWallet = "0x123456789abcdef"
         val fallbackGasOperation = "transfer"
 
-        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, validTxHex, fallbackGasOperation)
+        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, validTxHex, fallbackGasOperation, BigInteger.ZERO)
 
         // This will fail because it tries to decode the transaction, but we're testing the exception path
         assertFalse(result.success)
@@ -539,7 +539,7 @@ class BlockchainRelayServiceTest {
         val validTxHex = "0xf86d01825208944592d8f8d7b001e72cb26a73e4fa1806a51ac79d880de0b6b3a7640000802ca0a6e628b78619a62d3e41ba18a97ed0d4d44f96b7b54d1a6cb62a3e6b6e8b3e12ea0a6e628b78619a62d3e41ba18a97ed0d4d44f96b7b54d1a6cb62a3e6b6e8b3e12e"
         val fallbackGasOperation = "transfer"
 
-        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, validTxHex, fallbackGasOperation)
+        val result = blockchainRelayService.processTransactionWithGasTransfer(userWallet, validTxHex, fallbackGasOperation, BigInteger.ZERO)
 
         assertFalse(result.success)
         assertNull(result.transactionHash)
@@ -799,7 +799,8 @@ class BlockchainRelayServiceTest {
             val result = blockchainRelayService.processTransactionWithGasTransfer(
                 "0x123456789abcdef", 
                 txHex, 
-                "transfer"
+                "transfer",
+                BigInteger.ZERO
             )
             
             assertFalse(result.success, "Should fail for: $description")
@@ -809,24 +810,68 @@ class BlockchainRelayServiceTest {
     }
 
     @Test
-    fun `should validate gas limit successfully when within tolerance`() = runBlocking {
+    fun `should validate gas limit with expectedGasLimit parameter within tolerance`() = runBlocking {
         val mockTx = mock<RawTransaction>()
         whenever(mockTx.to).thenReturn("0x123456789abcdef")
-        whenever(mockTx.value).thenReturn(BigInteger.ZERO)
-        whenever(mockTx.data).thenReturn("0x")
-        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(25000)) // 25k gas provided
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(150000)) // User requests 150k
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(20000000000L)) // 20 gwei
         
-        // Mock gas estimation to return 20k (within 50% tolerance)
-        val estimateRequest = mock<Request<*, org.web3j.protocol.core.methods.response.EthEstimateGas>>()
-        val estimateResponse = mock<org.web3j.protocol.core.methods.response.EthEstimateGas>()
-        whenever(web3j.ethEstimateGas(any())).thenReturn(estimateRequest)
-        whenever(estimateRequest.send()).thenReturn(estimateResponse)
-        whenever(estimateResponse.hasError()).thenReturn(false)
-        whenever(estimateResponse.amountUsed).thenReturn(BigInteger.valueOf(20000))
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(20000000000L))
 
-        val result = blockchainRelayService.validateGasLimits(mockTx)
+        // Expected gas from foundry is 130k, with 20% buffer = 156k
+        val expectedGasLimit = BigInteger.valueOf(130000)
+        val result = blockchainRelayService.validateGasLimits(mockTx, "raiseDispute", expectedGasLimit)
 
-        assertTrue(result.success)
+        assertTrue(result.success) // 150k is within 156k limit
+        assertNull(result.error)
+    }
+    
+    @Test
+    fun `should reject gas limit when exceeding expectedGasLimit with buffer`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(200000)) // User requests 200k
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(20000000000L)) // 20 gwei
+        
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(20000000000L))
+
+        // Expected gas from foundry is 130k, with 20% buffer = 156k
+        val expectedGasLimit = BigInteger.valueOf(130000)
+        val result = blockchainRelayService.validateGasLimits(mockTx, "raiseDispute", expectedGasLimit)
+
+        assertFalse(result.success) // 200k exceeds 156k limit
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Gas limit exceeds expected for operation 'raiseDispute'"))
+    }
+    
+    @Test
+    fun `should fall back to max limits when expectedGasLimit is zero`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(500000)) // User requests 500k
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(20000000000L)) // 20 gwei
+        
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(20000000000L))
+
+        // No expected gas limit provided (zero)
+        val result = blockchainRelayService.validateGasLimits(mockTx, "unknownOperation", BigInteger.ZERO)
+
+        assertTrue(result.success) // 500k is within configured max of 1M
         assertNull(result.error)
     }
 

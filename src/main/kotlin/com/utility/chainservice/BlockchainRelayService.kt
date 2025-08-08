@@ -102,10 +102,11 @@ class BlockchainRelayService(
     suspend fun processTransactionWithGasTransfer(
         userWalletAddress: String, 
         signedTransactionHex: String, 
-        fallbackGasOperation: String
+        operationName: String,
+        expectedGasLimit: BigInteger = BigInteger.ZERO
     ): TransactionResult {
         return try {
-            logger.info("Processing transaction with gas transfer for user: $userWalletAddress")
+            logger.info("Processing transaction with gas transfer for user: $userWalletAddress, operation: $operationName")
 
             // Extract transaction details and sender address in one operation
             val txInfo = decodeTransactionWithSender(signedTransactionHex, userWalletAddress)
@@ -113,7 +114,7 @@ class BlockchainRelayService(
             val actualWalletAddress = txInfo.senderAddress
             
             // SECURITY: Validate gas limits against maximum allowed costs before funding
-            val gasValidationResult = validateGasLimits(decodedTx)
+            val gasValidationResult = validateGasLimits(decodedTx, operationName, expectedGasLimit)
             if (!gasValidationResult.success) {
                 logger.error("Gas validation failed: ${gasValidationResult.error}")
                 return TransactionResult(
@@ -139,7 +140,7 @@ class BlockchainRelayService(
                 } else {
                     // Fallback: use our gas provider estimate
                     logger.warn("Could not determine gas cost from transaction, using fallback estimate")
-                    val fallbackGasPrice = gasProvider.getGasPrice(fallbackGasOperation)
+                    val fallbackGasPrice = gasProvider.getGasPrice(operationName)
                     fallbackGasPrice.multiply(userGasLimit)
                 }
             }
@@ -345,9 +346,13 @@ class BlockchainRelayService(
         return DecodedTransactionInfo(decodedTx, senderAddress)
     }
 
-    suspend fun validateGasLimits(decodedTx: RawTransaction): TransactionResult {
+    suspend fun validateGasLimits(
+        decodedTx: RawTransaction,
+        operationName: String = "",
+        expectedGasLimit: BigInteger = BigInteger.ZERO
+    ): TransactionResult {
         return try {
-            logger.debug("Validating gas limits for transaction to: ${decodedTx.to}")
+            logger.debug("Validating gas limits for transaction to: ${decodedTx.to}, operation: $operationName")
             
             val userProvidedGas = decodedTx.gasLimit
             
@@ -367,13 +372,23 @@ class BlockchainRelayService(
             // Calculate total cost and check against maximum
             val totalCost = userProvidedGas.multiply(userGasPrice)
             val maxAllowedCost = BigInteger.valueOf(blockchainProperties.gas.maxGasCostWei)
-            val maxGasLimit = BigInteger.valueOf(blockchainProperties.gas.maxGasLimit)
+            
+            // Determine gas limit to validate against
+            val gasLimitToValidate = if (expectedGasLimit > BigInteger.ZERO) {
+                // Use operation-specific limit with 20% buffer for gas price fluctuations
+                val bufferMultiplier = BigInteger.valueOf(120)
+                val divisor = BigInteger.valueOf(100)
+                expectedGasLimit.multiply(bufferMultiplier).divide(divisor)
+            } else {
+                // Fall back to configured maximum gas limit
+                BigInteger.valueOf(blockchainProperties.gas.maxGasLimit)
+            }
             
             // Get current network gas price for comparison
             val currentNetworkGasPrice = web3j.ethGasPrice().send().gasPrice
             val maxAllowedGasPrice = currentNetworkGasPrice.multiply(BigInteger.valueOf(blockchainProperties.gas.maxGasPriceMultiplier.toLong()))
             
-            logger.info("Gas validation: userGasLimit=$userProvidedGas, maxGasLimit=$maxGasLimit, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
+            logger.info("Gas validation: operation=$operationName, userGasLimit=$userProvidedGas, expectedGasLimit=$expectedGasLimit, maxAllowedGasLimit=$gasLimitToValidate, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
 
             // Check total cost first (hard limit to prevent economic attack)
             if (totalCost > maxAllowedCost) {
@@ -385,13 +400,18 @@ class BlockchainRelayService(
                 )
             }
 
-            // Check gas limit (prevent excessive gas usage)
-            if (userProvidedGas > maxGasLimit) {
-                logger.warn("User provided excessive gas limit: $userProvidedGas > $maxGasLimit")
+            // Check gas limit against operation-specific or maximum limit
+            if (userProvidedGas > gasLimitToValidate) {
+                val errorMsg = if (expectedGasLimit > BigInteger.ZERO) {
+                    "Gas limit exceeds expected for operation '$operationName': provided $userProvidedGas, maximum allowed $gasLimitToValidate (includes 20% buffer)"
+                } else {
+                    "Gas limit too high: provided $userProvidedGas, maximum allowed $gasLimitToValidate"
+                }
+                logger.warn(errorMsg)
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = "Gas limit too high: provided $userProvidedGas, maximum allowed $maxGasLimit"
+                    error = errorMsg
                 )
             }
 
