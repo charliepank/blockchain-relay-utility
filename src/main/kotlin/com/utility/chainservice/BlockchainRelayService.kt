@@ -390,9 +390,9 @@ class BlockchainRelayService(
             
             logger.info("Gas validation: operation=$operationName, userGasLimit=$userProvidedGas, expectedGasLimit=$expectedGasLimit, maxAllowedGasLimit=$gasLimitToValidate, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
 
-            // Check total cost first (hard limit to prevent economic attack)
-            if (totalCost > maxAllowedCost) {
-                logger.warn("Transaction exceeds maximum cost: $totalCost > $maxAllowedCost wei")
+            // Check total cost - only use fallback limit if no operation-specific limit provided
+            if (expectedGasLimit == BigInteger.ZERO && totalCost > maxAllowedCost) {
+                logger.warn("Transaction exceeds maximum fallback cost: $totalCost > $maxAllowedCost wei")
                 return TransactionResult(
                     success = false,
                     transactionHash = null,

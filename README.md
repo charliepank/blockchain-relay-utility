@@ -36,7 +36,8 @@ class MyController(
             blockchainService.processTransactionWithGasTransfer(
                 userWalletAddress = request.userAddress,
                 signedTransactionHex = request.signedTransactionHex,
-                fallbackGasOperation = "submit"
+                operationName = "submit",
+                expectedGasLimit = BigInteger.ZERO  // Falls back to max limits
             )
         }
         
@@ -61,7 +62,7 @@ private lateinit var blockchainService: BlockchainRelayService
 fun testSubmit() {
     // Mock suspend functions with coEvery
     coEvery { 
-        blockchainService.processTransactionWithGasTransfer(any(), any(), any()) 
+        blockchainService.processTransactionWithGasTransfer(any(), any(), any(), any()) 
     } returns TransactionResult(
         success = true,
         transactionHash = "0x123...",
@@ -74,6 +75,7 @@ fun testSubmit() {
 
 - **Generic Transaction Relaying**: Core blockchain interaction and transaction forwarding
 - **Gas Management**: Automatic gas transfer to user wallets before transaction execution
+- **Operation-Specific Gas Validation**: Validates transactions against Foundry-measured gas requirements
 - **Authentication Interface**: Pluggable authentication providers (HTTP, JWT, etc.)
 - **Plugin System**: Clean interface for implementing business-specific logic
 - **Web3j Integration**: Full Ethereum-compatible blockchain support
@@ -130,7 +132,7 @@ blockchain:
     priceMultiplier: 1.2           # Gas price multiplier for relayer transactions
     minimumGasPriceWei: 6          # Minimum gas price in wei
     maxGasCostWei: 540000000       # Maximum total cost per transaction (security limit)
-    maxGasLimit: 1000000           # Maximum gas limit per transaction 
+    maxGasLimit: 1000000           # Fallback maximum gas limit when no operation-specific limit is provided
     maxGasPriceMultiplier: 3       # Maximum gas price (3x current network price)
 
 auth:
@@ -199,7 +201,8 @@ class MyServiceController(
             blockchainService.processTransactionWithGasTransfer(
                 userWalletAddress = request.userAddress,
                 signedTransactionHex = request.signedTransactionHex,
-                fallbackGasOperation = "submitTransaction"
+                operationName = "submitTransaction",
+                expectedGasLimit = BigInteger.valueOf(150000)  // From Foundry testing
             )
         }
         
@@ -235,6 +238,54 @@ The utility provides these generic endpoints:
 
 - `GET /api/relay/health` - Service health check with plugin status
 - `GET /api/relay/gas-costs` - Current gas costs for all plugin operations
+
+## Gas Validation and Management
+
+### Operation-Specific Gas Limits
+
+The utility now supports validating transactions against operation-specific gas limits measured from Foundry testing. This prevents users from requesting excessive gas for operations.
+
+```kotlin
+// Plugin code with operation-specific gas limits
+val raiseDisputeGasLimit = BigInteger.valueOf(130000)  // From Foundry testing
+
+val result = runBlocking {
+    blockchainService.processTransactionWithGasTransfer(
+        userWalletAddress = request.userAddress,
+        signedTransactionHex = request.signedTransactionHex,
+        operationName = "raiseDispute",
+        expectedGasLimit = raiseDisputeGasLimit  // Validates against 130k + 20% buffer
+    )
+}
+```
+
+### Gas Validation Logic
+
+1. **With operation-specific limit** (`expectedGasLimit > 0`):
+   - Validates user's gas request against expectedGasLimit + 20% buffer
+   - Example: 130k expected → allows up to 156k
+   - Rejects transactions requesting excessive gas
+
+2. **Without operation-specific limit** (`expectedGasLimit = 0`):
+   - Falls back to configured `maxGasLimit` (default 1M gas)
+   - Used for unknown or unspecified operations
+
+3. **Always enforced**:
+   - Total cost limit (`maxGasCostWei`) - prevents economic attacks
+   - Gas price limit (`maxGasPriceMultiplier`) - prevents overpaying
+
+### Recommended Configuration
+
+For services using operation-specific limits, set restrictive fallback limits:
+
+```yaml
+blockchain:
+  gas:
+    maxGasLimit: 1  # Set very low so unspecified operations fail
+    maxGasCostWei: 1  # Forces use of operation-specific limits
+```
+
+This ensures all operations must provide explicit gas limits from Foundry testing.
 
 ## Architecture
 

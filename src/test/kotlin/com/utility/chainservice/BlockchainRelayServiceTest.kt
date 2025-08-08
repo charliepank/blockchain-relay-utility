@@ -945,4 +945,74 @@ class BlockchainRelayServiceTest {
         assertNotNull(result.error)
         assertTrue(result.error!!.contains("Gas estimation failed"))
     }
+
+    @Test
+    fun `should allow high cost transactions when operation-specific gas limit provided`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(60000)) // User requests 60k gas
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(5)) // 5 wei gas price (from log)
+        
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(5))
+
+        // This should pass because we have operation-specific gas limit (approveUSDC: 60000)
+        // Total cost = 60000 * 5 = 300000 wei (much higher than fallback limit of 1 wei)
+        val expectedGasLimit = BigInteger.valueOf(60000) // approveUSDC gas limit
+        val result = blockchainRelayService.validateGasLimits(mockTx, "approveUSDC", expectedGasLimit)
+
+        assertTrue(result.success) // Should pass despite high cost
+        assertNull(result.error)
+    }
+
+    @Test
+    fun `should reject high cost transactions when no operation-specific gas limit provided`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(60000)) // Same gas as above
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(5)) // Same price as above
+        
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(5))
+
+        // This should fail because no operation-specific gas limit (falls back to 1 wei limit)
+        // Total cost = 60000 * 5 = 300000 wei (exceeds fallback limit of 1 wei)
+        val result = blockchainRelayService.validateGasLimits(mockTx, "unknownOperation", BigInteger.ZERO)
+
+        assertFalse(result.success) // Should fail due to high cost
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Transaction cost too high"))
+        assertTrue(result.error!!.contains("300000 wei"))
+        assertTrue(result.error!!.contains("maximum allowed 1 wei"))
+    }
+
+    @Test
+    fun `should allow low cost transactions even with fallback limits`() = runBlocking {
+        val mockTx = mock<RawTransaction>()
+        whenever(mockTx.to).thenReturn("0x123456789abcdef")
+        whenever(mockTx.gasLimit).thenReturn(BigInteger.valueOf(1)) // Very low gas
+        whenever(mockTx.gasPrice).thenReturn(BigInteger.valueOf(1)) // Very low price
+        
+        // Mock current network gas price
+        val gasPriceRequest = mock<Request<*, EthGasPrice>>()
+        val gasPriceResponse = mock<EthGasPrice>()
+        whenever(web3j.ethGasPrice()).thenReturn(gasPriceRequest)
+        whenever(gasPriceRequest.send()).thenReturn(gasPriceResponse)
+        whenever(gasPriceResponse.gasPrice).thenReturn(BigInteger.valueOf(1))
+
+        // Total cost = 1 * 1 = 1 wei (exactly matches fallback limit)
+        val result = blockchainRelayService.validateGasLimits(mockTx, "unknownOperation", BigInteger.ZERO)
+
+        assertFalse(result.success) // Should fail due to gas limit being too high for fallback
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Gas limit too high"))
+    }
 }
