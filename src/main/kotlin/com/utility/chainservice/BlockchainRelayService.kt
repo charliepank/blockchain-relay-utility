@@ -176,21 +176,19 @@ class BlockchainRelayService(
                     )
                 }
                 
-                // Wait a moment and refresh user's balance to ensure gas transfer is reflected
-                Thread.sleep(1000) // Brief delay to allow balance update
-                val updatedBalance = web3j.ethGetBalance(actualWalletAddress, DefaultBlockParameterName.LATEST).send().balance
-                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
-                
-                // Verify the user now has sufficient balance
-                if (updatedBalance < totalAmountNeeded) {
-                    logger.error("User balance still insufficient after gas transfer: $updatedBalance wei < $totalAmountNeeded wei")
+                // Wait for balance to update with retry mechanism
+                val updatedBalance = waitForBalanceUpdate(actualWalletAddress, currentBalance, totalAmountNeeded)
+                if (updatedBalance == null) {
+                    logger.error("Balance update timeout after gas transfer")
                     return TransactionResult(
                         success = false,
                         transactionHash = null,
-                        error = "Insufficient balance after gas transfer: have $updatedBalance wei, need $totalAmountNeeded wei",
+                        error = "Balance update timeout after gas transfer",
                         contractAddress = decodedTx.to
                     )
                 }
+                
+                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
             } else {
                 logger.info("User already has sufficient balance ($currentBalance wei >= $totalAmountNeeded wei), skipping transfer")
             }
@@ -302,6 +300,50 @@ class BlockchainRelayService(
                 transactionHash = null,
                 error = e.message ?: "Unknown error occurred"
             )
+        }
+    }
+
+    private suspend fun waitForBalanceUpdate(
+        userAddress: String, 
+        previousBalance: BigInteger, 
+        requiredAmount: BigInteger
+    ): BigInteger? {
+        return try {
+            var attempts = 0
+            val maxAttempts = 15 // 30 seconds max (15 * 2 seconds)
+            
+            while (attempts < maxAttempts) {
+                val currentBalance = web3j.ethGetBalance(userAddress, DefaultBlockParameterName.LATEST).send().balance
+                
+                // Check if balance has increased and is sufficient
+                if (currentBalance > previousBalance && currentBalance >= requiredAmount) {
+                    logger.info("Balance updated successfully after ${attempts + 1} attempts")
+                    return currentBalance
+                }
+                
+                // Even if balance increased but still not sufficient, continue waiting
+                if (currentBalance > previousBalance) {
+                    logger.debug("Balance partially updated ($currentBalance wei), still waiting for full update (need $requiredAmount wei)")
+                } else {
+                    logger.debug("Balance not yet updated (attempt ${attempts + 1}/$maxAttempts): $currentBalance wei")
+                }
+                
+                Thread.sleep(2000)
+                attempts++
+            }
+            
+            // Final check after all attempts
+            val finalBalance = web3j.ethGetBalance(userAddress, DefaultBlockParameterName.LATEST).send().balance
+            if (finalBalance >= requiredAmount) {
+                logger.info("Balance sufficient after timeout period: $finalBalance wei")
+                return finalBalance
+            }
+            
+            logger.warn("Balance update timeout after $maxAttempts attempts. Final balance: $finalBalance wei, required: $requiredAmount wei")
+            null
+        } catch (e: Exception) {
+            logger.error("Error waiting for balance update", e)
+            null
         }
     }
 
