@@ -175,6 +175,22 @@ class BlockchainRelayService(
                         contractAddress = decodedTx.to
                     )
                 }
+                
+                // Wait a moment and refresh user's balance to ensure gas transfer is reflected
+                Thread.sleep(1000) // Brief delay to allow balance update
+                val updatedBalance = web3j.ethGetBalance(actualWalletAddress, DefaultBlockParameterName.LATEST).send().balance
+                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
+                
+                // Verify the user now has sufficient balance
+                if (updatedBalance < totalAmountNeeded) {
+                    logger.error("User balance still insufficient after gas transfer: $updatedBalance wei < $totalAmountNeeded wei")
+                    return TransactionResult(
+                        success = false,
+                        transactionHash = null,
+                        error = "Insufficient balance after gas transfer: have $updatedBalance wei, need $totalAmountNeeded wei",
+                        contractAddress = decodedTx.to
+                    )
+                }
             } else {
                 logger.info("User already has sufficient balance ($currentBalance wei >= $totalAmountNeeded wei), skipping transfer")
             }
