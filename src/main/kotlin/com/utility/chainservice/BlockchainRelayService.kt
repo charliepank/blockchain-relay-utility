@@ -129,7 +129,7 @@ class BlockchainRelayService(
             val transactionValue = decodedTx.value ?: BigInteger.ZERO
             
             // Calculate exact gas cost based on transaction type
-            val gasCost = try {
+            val baseGasCost = try {
                 // Legacy transaction: gasPrice * gasLimit
                 decodedTx.gasPrice.multiply(userGasLimit)
             } catch (e: UnsupportedOperationException) {
@@ -145,10 +145,17 @@ class BlockchainRelayService(
                 }
             }
             
+            // Apply price multiplier to ensure user has enough funds when transaction is executed
+            val gasCost = baseGasCost.multiply(
+                BigInteger.valueOf((blockchainProperties.gas.priceMultiplier * 100).toLong())
+            ).divide(BigInteger.valueOf(100))
+            
+            logger.debug("Gas cost calculation: baseGasCost=$baseGasCost, priceMultiplier=${blockchainProperties.gas.priceMultiplier}, adjustedGasCost=$gasCost")
+            
             // Total amount needed = gas cost + transaction value
             val totalAmountNeeded = gasCost.add(transactionValue)
             
-            logger.info("Transaction requires: gasLimit=$userGasLimit, gasCost=$gasCost wei, transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
+            logger.info("Transaction requires: gasLimit=$userGasLimit, gasCost=$gasCost wei (with ${blockchainProperties.gas.priceMultiplier}x multiplier), transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
 
             // Check user's current AVAX balance
             val currentBalance = web3j.ethGetBalance(actualWalletAddress, DefaultBlockParameterName.LATEST).send().balance
