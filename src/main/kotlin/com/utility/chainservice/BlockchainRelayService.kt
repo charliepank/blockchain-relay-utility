@@ -14,6 +14,7 @@ import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
 import org.web3j.tx.gas.ContractGasProvider
 import org.web3j.utils.Numeric
+import com.utility.chainservice.contracts.GasPayerContract
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -26,6 +27,22 @@ class BlockchainRelayService(
     private val chainId: Long,
     private val blockchainProperties: BlockchainProperties
 ) {
+
+    private val gasPayerContract: GasPayerContract? by lazy {
+        val contractAddress = blockchainProperties.relayer.gasPayerContractAddress
+        if (contractAddress.isNotBlank()) {
+            logger.info("Initializing Gas Payer Contract at address: $contractAddress")
+            GasPayerContract.load(
+                contractAddress,
+                web3j,
+                relayerCredentials,
+                gasProvider
+            )
+        } else {
+            logger.warn("Gas Payer Contract address not configured, direct transfers will fail")
+            null
+        }
+    }
 
     private val logger = LoggerFactory.getLogger(BlockchainRelayService::class.java)
 
@@ -238,63 +255,45 @@ class BlockchainRelayService(
 
     suspend fun transferGasToUser(userAddress: String, gasAmount: BigInteger): TransactionResult {
         return try {
-            logger.info("Transferring $gasAmount wei to user: $userAddress")
+            logger.info("Transferring $gasAmount wei to user: $userAddress via Gas Payer Contract")
             
-            val nonce = web3j.ethGetTransactionCount(
-                relayerCredentials.address,
-                DefaultBlockParameterName.PENDING
-            ).send().transactionCount
-            
-            val gasPrice = gasProvider.gasPrice
-            val gasLimit = BigInteger.valueOf(21000) // Standard gas limit for ETH transfer
-
-            val rawTransaction = RawTransaction.createEtherTransaction(
-                nonce,
-                gasPrice,
-                gasLimit,
-                userAddress,
-                gasAmount
-            )
-
-            val signedTransaction = org.web3j.crypto.TransactionEncoder.signMessage(
-                rawTransaction,
-                chainId,
-                relayerCredentials
-            )
-
-            val transactionHash = web3j.ethSendRawTransaction(
-                Numeric.toHexString(signedTransaction)
-            ).send()
-
-            if (transactionHash.hasError()) {
-                logger.error("Gas transfer failed: ${transactionHash.error.message}")
-                return TransactionResult(
+            val contract = gasPayerContract
+                ?: return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = transactionHash.error.message
+                    error = "Gas Payer Contract not configured (GAS_PAYER_CONTRACT_ADDRESS missing)"
                 )
-            }
+            
+            // Calculate fee that will be charged by the contract
+            val fee = contract.calculateFee(gasAmount).send()
+            val totalAmount = gasAmount.add(fee)
+            
+            logger.info("Gas transfer: amount=$gasAmount wei, fee=$fee wei, total=$totalAmount wei")
+            
+            // Call fundAndRelay with the total amount (gas + fee)
+            val receipt = contract.fundAndRelay(
+                userAddress,
+                gasAmount,
+                totalAmount
+            ).send()
 
-            val txHash = transactionHash.transactionHash
-            logger.info("Gas transfer transaction sent: $txHash")
-
-            val receipt = waitForTransactionReceipt(txHash)
             if (receipt?.isStatusOK == true) {
-                logger.info("Gas transferred successfully to user")
+                logger.info("Gas transferred successfully to user via contract: ${receipt.transactionHash}")
                 TransactionResult(
                     success = true,
-                    transactionHash = txHash
+                    transactionHash = receipt.transactionHash
                 )
             } else {
+                logger.error("Gas transfer via contract failed: ${receipt?.revertReason ?: "Unknown error"}")
                 TransactionResult(
                     success = false,
-                    transactionHash = txHash,
-                    error = "Gas transfer transaction failed"
+                    transactionHash = receipt?.transactionHash,
+                    error = "Gas transfer transaction failed: ${receipt?.revertReason ?: "Unknown error"}"
                 )
             }
 
         } catch (e: Exception) {
-            logger.error("Error transferring gas to user", e)
+            logger.error("Error transferring gas to user via contract", e)
             TransactionResult(
                 success = false,
                 transactionHash = null,

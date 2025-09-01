@@ -75,7 +75,7 @@ fun testSubmit() {
 
 - **Generic Transaction Relaying**: Core blockchain interaction and transaction forwarding
 - **Gas Management**: Automatic gas transfer to user wallets before transaction execution
-- **Operation-Specific Gas Validation**: Validates transactions against Foundry-measured gas requirements
+- **Three-Tier Gas Validation**: Validates transactions against configurable limits (total cost, gas limit, gas price)
 - **Authentication Interface**: Pluggable authentication providers (HTTP, JWT, etc.)
 - **Plugin System**: Clean interface for implementing business-specific logic
 - **Web3j Integration**: Full Ethereum-compatible blockchain support
@@ -243,11 +243,11 @@ The utility provides these generic endpoints:
 
 ### Operation-Specific Gas Limits
 
-The utility now supports validating transactions against operation-specific gas limits measured from Foundry testing. This prevents users from requesting excessive gas for operations.
+The utility supports validating transactions against operation-specific gas limits defined by plugins. This prevents users from requesting excessive gas for operations.
 
 ```kotlin
 // Plugin code with operation-specific gas limits
-val raiseDisputeGasLimit = BigInteger.valueOf(130000)  // From Foundry testing
+val raiseDisputeGasLimit = BigInteger.valueOf(130000)  // Define expected gas for operation
 
 val result = runBlocking {
     blockchainService.processTransactionWithGasTransfer(
@@ -261,18 +261,22 @@ val result = runBlocking {
 
 ### Gas Validation Logic
 
-1. **With operation-specific limit** (`expectedGasLimit > 0`):
-   - Validates user's gas request against expectedGasLimit + 20% buffer
+The utility performs three-tier gas validation:
+
+1. **Operation-specific validation** (when `expectedGasLimit > 0`):
+   - Validates user's gas limit against expectedGasLimit + 20% buffer
    - Example: 130k expected → allows up to 156k
-   - Rejects transactions requesting excessive gas
+   - Prevents requesting excessive gas for known operations
 
-2. **Without operation-specific limit** (`expectedGasLimit = 0`):
-   - Falls back to configured `maxGasLimit` (default 1M gas)
-   - Used for unknown or unspecified operations
+2. **Fallback validation** (when `expectedGasLimit = 0`):
+   - Uses configured `maxGasLimit` (default 1M gas)
+   - Applied for unknown or unspecified operations
+   - Also checks total cost against `maxGasCostWei` limit
 
-3. **Always enforced**:
-   - Total cost limit (`maxGasCostWei`) - prevents economic attacks
-   - Gas price limit (`maxGasPriceMultiplier`) - prevents overpaying
+3. **Always enforced checks**:
+   - **Total cost limit**: `gasLimit × gasPrice` must not exceed `maxGasCostWei`
+   - **Gas price limit**: User's gas price must not exceed `currentNetworkGasPrice × maxGasPriceMultiplier`
+   - **Gas limit check**: User's gas limit validated against operation-specific or maximum limits
 
 ### Recommended Configuration
 
@@ -285,7 +289,7 @@ blockchain:
     maxGasCostWei: 1  # Forces use of operation-specific limits
 ```
 
-This ensures all operations must provide explicit gas limits from Foundry testing.
+This ensures all operations must provide explicit gas limits.
 
 ## Architecture
 

@@ -27,9 +27,13 @@ The utility implements a plugin architecture where:
 
 1. **Transaction Decoding**: Decodes user's signed transaction to extract gas limit, value, and contract data
 2. **Gas Validation**: Validates user's gas limits and prices against configured maximum thresholds
-3. **Balance Check & Funding**: Checks user's AVAX balance and transfers exact amount needed if insufficient
-4. **Transaction Forwarding**: Forwards original signed transaction unchanged to the blockchain
-5. **Receipt Waiting**: Monitors transaction status and provides success/failure results
+3. **Balance Check & Contract Funding**: Checks user's AVAX balance and uses Gas Payer Contract to fund if insufficient
+   - Calls `calculateFee(gasAmount)` to determine service fee
+   - Sends `gasAmount + fee` to contract via `fundAndRelay(userAddress, gasAmount)`
+   - Contract transfers `gasAmount` to user and retains fee automatically
+4. **Balance Confirmation**: Waits for user's balance to update before proceeding
+5. **Transaction Forwarding**: Forwards original signed transaction unchanged to the blockchain
+6. **Receipt Waiting**: Monitors transaction status and provides success/failure results
 
 ## Development Commands
 
@@ -61,6 +65,7 @@ The utility implements a plugin architecture where:
 - `RPC_URL`: Blockchain RPC endpoint (e.g., Avalanche network)
 - `RELAYER_PRIVATE_KEY`: Private key for gas-paying wallet (0x-prefixed hex, 66 chars)
 - `RELAYER_WALLET_ADDRESS`: Address of the relayer wallet
+- `GAS_PAYER_CONTRACT_ADDRESS`: Address of the Gas Payer Contract for fee collection (0x-prefixed hex, 42 chars)
 - `USER_SERVICE_URL`: URL for user authentication service (if using HTTP auth)
 
 ### Application Configuration (application.yml)
@@ -71,6 +76,7 @@ blockchain:
   relayer:
     private-key: "${RELAYER_PRIVATE_KEY}"
     wallet-address: "${RELAYER_WALLET_ADDRESS}"
+    gas-payer-contract-address: "${GAS_PAYER_CONTRACT_ADDRESS}"
   gas:
     price-multiplier: 1.2  # Multiply network gas price by this factor (default: 1.2)
     minimum-gas-price-wei: 6  # Minimum gas price in wei (default: 6)
@@ -85,11 +91,12 @@ auth:
 
 ## Key Features
 
-### Gas Management
+### Gas Management with Fee Collection
 - **Security-First Gas Validation**: Validates user-provided gas limits and prices against configurable maximum thresholds
 - Extracts exact gas costs from user-signed transactions (supports both legacy and EIP-1559)
-- Automatically transfers AVAX to user wallets before transaction execution
-- Only transfers the exact amount needed (gas cost + transaction value - current balance)
+- **Gas Payer Contract Integration**: Uses a smart contract to transfer AVAX to user wallets while collecting service fees
+- Contract calculates fees automatically (percentage-based with minimum fee floor)
+- Backend pays `gasAmount + calculatedFee` to contract; contract transfers `gasAmount` to user and keeps fee
 - Three-tier validation: total cost limit, maximum gas limit, and maximum gas price multiplier
 
 ### Authentication System
@@ -105,6 +112,16 @@ To create a plugin:
 4. Define gas operations for cost estimation
 5. Create REST controllers using the plugin's API prefix
 
+### Gas Payer Contract Integration
+- **Contract Interface**: Automatically loads and initializes the Gas Payer Contract using the configured address
+- **Fee Calculation**: Calls `calculateFee(gasAmount)` to determine the service fee before each transaction
+- **Atomic Funding**: Uses `fundAndRelay(signerAddress, gasAmount)` with total payment (`gasAmount + fee`)
+- **Error Handling**: Comprehensive error handling for contract failures, insufficient funds, and network issues
+- **Contract Requirements**: 
+  - Contract must implement `fundAndRelay(address, uint256) payable` function
+  - Contract must implement `calculateFee(uint256) view returns (uint256)` function
+  - Contract handles fee distribution and user funding automatically
+
 ### Web3j Integration
 - Full Ethereum-compatible blockchain support
 - Transaction decoding and encoding
@@ -117,6 +134,7 @@ To create a plugin:
 - Test configuration in `src/test/resources/application-test.yml`
 - Uses Avalanche Fuji testnet (chain ID 43113) for testing
 - Mock authentication disabled in test environment (`auth.enabled: false`)
+- Mock Gas Payer Contract address configured for testing
 - Debug logging enabled for `com.utility.chainservice` package
 
 ### Testing Framework

@@ -23,7 +23,8 @@ data class BlockchainProperties(
 
 data class RelayerProperties(
     var privateKey: String = "",
-    var walletAddress: String = ""
+    var walletAddress: String = "",
+    var gasPayerContractAddress: String = ""  // Gas payer contract address for fee collection
 )
 
 data class GasProperties(
@@ -63,6 +64,14 @@ class UtilityAutoConfiguration(
         require(privateKey.startsWith("0x") && privateKey.length == 66) { 
             "RELAYER_PRIVATE_KEY must be a 64-character hex string prefixed with 0x" 
         }
+        
+        // Validate gas payer contract address
+        val gasPayerContract = blockchainProperties.relayer.gasPayerContractAddress
+        require(gasPayerContract.isNotBlank()) { "GAS_PAYER_CONTRACT_ADDRESS is required" }
+        require(gasPayerContract.startsWith("0x") && gasPayerContract.length == 42) {
+            "GAS_PAYER_CONTRACT_ADDRESS must be a valid Ethereum address (0x + 40 hex chars)"
+        }
+        
         return Credentials.create(privateKey)
     }
 
