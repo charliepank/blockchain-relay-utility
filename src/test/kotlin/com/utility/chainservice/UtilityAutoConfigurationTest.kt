@@ -42,7 +42,12 @@ class UtilityAutoConfigurationTest {
             enabled = true
         )
         
-        utilityAutoConfiguration = UtilityAutoConfiguration(blockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(
+            configPath = "./src/test/resources/test-security-config.json",
+            enabled = false
+        )
+        
+        utilityAutoConfiguration = UtilityAutoConfiguration(blockchainProperties, authProperties, securityProperties)
     }
 
     @Test
@@ -69,7 +74,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         )
         val invalidBlockchainProperties = blockchainProperties.copy(relayer = invalidRelayerProperties)
-        val invalidConfig = UtilityAutoConfiguration(invalidBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val invalidConfig = UtilityAutoConfiguration(invalidBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             invalidConfig.relayerCredentials()
@@ -84,7 +90,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         )
         val blankBlockchainProperties = blockchainProperties.copy(relayer = blankRelayerProperties)
-        val blankConfig = UtilityAutoConfiguration(blankBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val blankConfig = UtilityAutoConfiguration(blankBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             blankConfig.relayerCredentials()
@@ -99,7 +106,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         )
         val shortBlockchainProperties = blockchainProperties.copy(relayer = shortRelayerProperties)
-        val shortConfig = UtilityAutoConfiguration(shortBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val shortConfig = UtilityAutoConfiguration(shortBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             shortConfig.relayerCredentials()
@@ -211,7 +219,8 @@ class UtilityAutoConfigurationTest {
             userServiceUrl = "https://user-service.example.com",
             enabled = false
         )
-        val disabledConfig = UtilityAutoConfiguration(blockchainProperties, disabledAuthProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val disabledConfig = UtilityAutoConfiguration(blockchainProperties, disabledAuthProperties, securityProperties)
         
         val authProvider = disabledConfig.authenticationProvider()
         
@@ -308,7 +317,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = ""
         )
         val blankContractBlockchainProperties = blockchainProperties.copy(relayer = blankContractRelayerProperties)
-        val blankContractConfig = UtilityAutoConfiguration(blankContractBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val blankContractConfig = UtilityAutoConfiguration(blankContractBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             blankContractConfig.relayerCredentials()
@@ -323,7 +333,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = "invalid-contract-address"
         )
         val invalidContractBlockchainProperties = blockchainProperties.copy(relayer = invalidContractRelayerProperties)
-        val invalidContractConfig = UtilityAutoConfiguration(invalidContractBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val invalidContractConfig = UtilityAutoConfiguration(invalidContractBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             invalidContractConfig.relayerCredentials()
@@ -338,7 +349,8 @@ class UtilityAutoConfigurationTest {
             gasPayerContractAddress = "0x123"
         )
         val shortContractBlockchainProperties = blockchainProperties.copy(relayer = shortContractRelayerProperties)
-        val shortContractConfig = UtilityAutoConfiguration(shortContractBlockchainProperties, authProperties)
+        val securityProperties = SecurityProperties(enabled = false)
+        val shortContractConfig = UtilityAutoConfiguration(shortContractBlockchainProperties, authProperties, securityProperties)
         
         assertThrows(IllegalArgumentException::class.java) {
             shortContractConfig.relayerCredentials()

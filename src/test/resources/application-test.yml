@@ -13,6 +13,10 @@ auth:
   user-service-url: "http://localhost:8081"
   enabled: false
 
+security:
+  enabled: false  # Disable security for tests
+  config-path: "./src/test/resources/test-security-config.json"
+
 logging:
   level:
     com.utility.chainservice: DEBUG

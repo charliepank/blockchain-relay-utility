@@ -68,6 +68,9 @@ The utility implements a plugin architecture where:
 - `GAS_PAYER_CONTRACT_ADDRESS`: Address of the Gas Payer Contract for fee collection (0x-prefixed hex, 42 chars)
 - `USER_SERVICE_URL`: URL for user authentication service (if using HTTP auth)
 
+### Security Configuration File
+The service uses a JSON configuration file for API key and IP whitelist management. By default, this file should be located at `./config/security-config.json`, but the path is configurable.
+
 ### Application Configuration (application.yml)
 ```yaml
 blockchain:
@@ -87,6 +90,10 @@ blockchain:
 auth:
   user-service-url: "${USER_SERVICE_URL}"
   enabled: true  # Set to false to disable authentication
+
+security:
+  enabled: true  # Set to false to disable API key security
+  config-path: "./config/security-config.json"  # Path to security configuration file
 ```
 
 ## Key Features
@@ -99,9 +106,17 @@ auth:
 - Backend pays `gasAmount + calculatedFee` to contract; contract transfers `gasAmount` to user and keeps fee
 - Three-tier validation: total cost limit, maximum gas limit, and maximum gas price multiplier
 
-### Authentication System
-- Pluggable authentication via `AuthenticationProvider` interface
-- Default HTTP-based authentication using external user service
+### API Key & IP Whitelist Security System
+- **Hot-Reloadable Configuration**: JSON configuration file that updates without server restart
+- **API Key Authentication**: Validates requests using `X-API-Key` header or `Authorization: Bearer` header
+- **IP Whitelist Support**: Per-API key and global IP restrictions with CIDR notation support
+- **Flexible IP Patterns**: Supports exact IPs, wildcards (`192.168.1.*`), and CIDR ranges (`10.0.0.0/24`)
+- **File Watcher**: Automatically detects configuration file changes and reloads security settings
+- **Security Logging**: Configurable logging of authentication attempts and failures
+
+### Legacy Authentication System
+- Pluggable authentication via `AuthenticationProvider` interface  
+- HTTP-based authentication using external user service
 - JWT token validation with reactive (Mono) responses
 
 ### Plugin Development
@@ -121,6 +136,56 @@ To create a plugin:
   - Contract must implement `fundAndRelay(address, uint256) payable` function
   - Contract must implement `calculateFee(uint256) view returns (uint256)` function
   - Contract handles fee distribution and user funding automatically
+
+### Security Configuration File Format
+
+The `security-config.json` file controls API key authentication and IP whitelisting:
+
+```json
+{
+  "apiKeys": [
+    {
+      "key": "your_api_key_here",
+      "name": "Client Name",
+      "allowedIps": ["192.168.1.100", "10.0.0.0/24"],
+      "enabled": true,
+      "description": "Description of this client"
+    }
+  ],
+  "globalIpWhitelist": ["127.0.0.1", "::1"],
+  "settings": {
+    "requireApiKey": true,
+    "enforceIpWhitelist": true,
+    "logFailedAttempts": true,
+    "rateLimitEnabled": false,
+    "rateLimitRequestsPerMinute": 60
+  }
+}
+```
+
+**API Key Configuration:**
+- `key`: The API key string that clients must provide
+- `name`: Human-readable name for the client
+- `allowedIps`: List of allowed IP addresses/patterns (empty = no restrictions)
+- `enabled`: Whether this API key is currently active
+- `description`: Optional description
+
+**IP Address Patterns:**
+- Exact IP: `"192.168.1.100"`
+- Wildcard: `"192.168.1.*"` (matches 192.168.1.0-255)
+- CIDR: `"10.0.0.0/24"` (matches 10.0.0.0-255)
+
+**Client Usage:**
+```bash
+# Using X-API-Key header
+curl -H "X-API-Key: your_api_key_here" http://localhost:8080/api/endpoint
+
+# Using Authorization header
+curl -H "Authorization: Bearer your_api_key_here" http://localhost:8080/api/endpoint
+
+# Using query parameter
+curl "http://localhost:8080/api/endpoint?api_key=your_api_key_here"
+```
 
 ### Web3j Integration
 - Full Ethereum-compatible blockchain support

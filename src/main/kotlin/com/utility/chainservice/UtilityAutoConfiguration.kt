@@ -41,12 +41,19 @@ data class AuthProperties(
     var enabled: Boolean = true
 )
 
+@ConfigurationProperties(prefix = "security")
+data class SecurityProperties(
+    var configPath: String = "./config/security-config.json",
+    var enabled: Boolean = true
+)
+
 @Configuration
-@EnableConfigurationProperties(BlockchainProperties::class, AuthProperties::class)
+@EnableConfigurationProperties(BlockchainProperties::class, AuthProperties::class, SecurityProperties::class)
 @ComponentScan(basePackages = ["com.utility.chainservice"])
 class UtilityAutoConfiguration(
     private val blockchainProperties: BlockchainProperties,
-    private val authProperties: AuthProperties
+    private val authProperties: AuthProperties,
+    private val securityProperties: SecurityProperties
 ) {
 
     @Bean("web3j")
@@ -119,6 +126,14 @@ class UtilityAutoConfiguration(
         return HttpAuthenticationProvider(
             userServiceUrl = authProperties.userServiceUrl,
             enabled = authProperties.enabled
+        )
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun securityConfigurationService(): com.utility.chainservice.security.SecurityConfigurationService {
+        return com.utility.chainservice.security.SecurityConfigurationService(
+            securityConfigPath = securityProperties.configPath
         )
     }
 }

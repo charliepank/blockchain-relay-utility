@@ -1,0 +1,17 @@
+{
+  "apiKeys": [
+    {
+      "key": "test_api_key_12345",
+      "name": "Test Client",
+      "allowedIps": ["127.0.0.1"],
+      "enabled": true,
+      "description": "Test API key for unit tests"
+    }
+  ],
+  "globalIpWhitelist": ["127.0.0.1", "::1"],
+  "settings": {
+    "requireApiKey": false,
+    "enforceIpWhitelist": false,
+    "logFailedAttempts": false
+  }
+}

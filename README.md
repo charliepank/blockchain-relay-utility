@@ -74,8 +74,10 @@ fun testSubmit() {
 ## Features
 
 - **Generic Transaction Relaying**: Core blockchain interaction and transaction forwarding
-- **Gas Management**: Automatic gas transfer to user wallets before transaction execution
+- **Gas Management with Fee Collection**: Automatic gas transfer via Gas Payer Contract with service fee collection
 - **Three-Tier Gas Validation**: Validates transactions against configurable limits (total cost, gas limit, gas price)
+- **API Key & IP Whitelist Security**: Hot-reloadable JSON configuration for authentication and IP restrictions
+- **Flexible IP Patterns**: Supports exact IPs, wildcards, and CIDR notation
 - **Authentication Interface**: Pluggable authentication providers (HTTP, JWT, etc.)
 - **Plugin System**: Clean interface for implementing business-specific logic
 - **Web3j Integration**: Full Ethereum-compatible blockchain support
@@ -326,7 +328,12 @@ interface BlockchainServicePlugin {
 - `RPC_URL` - Blockchain RPC endpoint
 - `RELAYER_PRIVATE_KEY` - Private key for gas-paying wallet (0x-prefixed hex)
 - `RELAYER_WALLET_ADDRESS` - Address of the relayer wallet
+- `GAS_PAYER_CONTRACT_ADDRESS` - Address of the Gas Payer Contract for fee collection
 - `USER_SERVICE_URL` - URL for user authentication service (if using HTTP auth)
+
+### Security Configuration File
+
+The service uses a hot-reloadable JSON configuration file for API key authentication and IP whitelisting. This file can be updated without restarting the server.
 
 ### Property Configuration
 
@@ -340,9 +347,15 @@ blockchain:
   relayer:
     privateKey: "${RELAYER_PRIVATE_KEY}"
     walletAddress: "${RELAYER_WALLET_ADDRESS}"
+    gasPayerContractAddress: "${GAS_PAYER_CONTRACT_ADDRESS}"
   gas:
     priceMultiplier: 1.2  # Default: 1.2x network gas price
     minimumGasPriceWei: 6  # Default: 6 wei minimum
+
+# Security configuration
+security:
+  enabled: true  # Set to false to disable API key security
+  configPath: "./config/security-config.json"  # Path to security configuration file
 
 # ✅ Correct - your business properties
 my-service:
@@ -367,9 +380,111 @@ data class MyServiceProperties(
 )
 ```
 
-## Authentication
+## Security & Authentication
 
-The utility supports pluggable authentication:
+### API Key & IP Whitelist Security
+
+The utility provides a comprehensive security system using API keys and IP whitelisting with hot-reloadable configuration.
+
+#### Security Configuration File Format
+
+Create a `security-config.json` file (default location: `./config/security-config.json`):
+
+```json
+{
+  "apiKeys": [
+    {
+      "key": "your_api_key_here",
+      "name": "Production Client",
+      "allowedIps": ["192.168.1.100", "10.0.0.0/24"],
+      "enabled": true,
+      "description": "Production environment client"
+    },
+    {
+      "key": "dev_api_key_12345",
+      "name": "Development Client", 
+      "allowedIps": ["127.0.0.1", "192.168.*.*"],
+      "enabled": true,
+      "description": "Development environment with local access"
+    }
+  ],
+  "globalIpWhitelist": ["127.0.0.1", "::1"],
+  "settings": {
+    "requireApiKey": true,
+    "enforceIpWhitelist": true,
+    "logFailedAttempts": true,
+    "rateLimitEnabled": false,
+    "rateLimitRequestsPerMinute": 60
+  }
+}
+```
+
+#### Configuration Fields
+
+**API Key Configuration:**
+- `key`: The API key string that clients must provide
+- `name`: Human-readable name for the client
+- `allowedIps`: List of allowed IP addresses/patterns (empty array = no IP restrictions)
+- `enabled`: Whether this API key is currently active
+- `description`: Optional description for documentation
+
+**IP Address Patterns:**
+- **Exact IP**: `"192.168.1.100"`
+- **Wildcard**: `"192.168.1.*"` (matches 192.168.1.0-255)
+- **CIDR notation**: `"10.0.0.0/24"` (matches 10.0.0.0-255)
+
+**Settings:**
+- `requireApiKey`: Enable/disable API key validation
+- `enforceIpWhitelist`: Enable/disable IP address restrictions
+- `logFailedAttempts`: Log authentication failures
+- `rateLimitEnabled`: Enable rate limiting (future feature)
+- `rateLimitRequestsPerMinute`: Requests per minute limit
+
+#### Client Usage Examples
+
+Clients can authenticate using any of these methods:
+
+```bash
+# Method 1: X-API-Key header (recommended)
+curl -H "X-API-Key: your_api_key_here" \
+     http://localhost:8080/api/your-endpoint
+
+# Method 2: Authorization Bearer header
+curl -H "Authorization: Bearer your_api_key_here" \
+     http://localhost:8080/api/your-endpoint
+
+# Method 3: Query parameter (fallback)
+curl "http://localhost:8080/api/your-endpoint?api_key=your_api_key_here"
+```
+
+#### Hot Reloading
+
+The security configuration is automatically reloaded when the file changes:
+
+1. Edit the `security-config.json` file
+2. Save the changes
+3. The service detects the file modification and reloads the configuration
+4. New security rules take effect immediately (no server restart required)
+
+#### Health Check Bypass
+
+The following endpoints bypass security checks:
+- `/actuator/health`
+- `/health`
+- `/ping` 
+- `/status`
+
+#### Security Logging
+
+When `logFailedAttempts` is enabled, the service logs:
+- Invalid API keys
+- IP address rejections
+- Authentication errors
+- Successful authentications (debug level)
+
+### Legacy Authentication System
+
+The utility also supports pluggable authentication for backward compatibility:
 
 ### HTTP Authentication (Default)
 

@@ -1,0 +1,47 @@
+{
+  "apiKeys": [
+    {
+      "key": "prod_api_key_1234567890abcdef",
+      "name": "Production Client A",
+      "allowedIps": [
+        "192.168.1.100",
+        "10.0.0.0/24"
+      ],
+      "enabled": true,
+      "description": "Production environment client with restricted IP access",
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "key": "dev_api_key_abcdef1234567890",
+      "name": "Development Client",
+      "allowedIps": [
+        "127.0.0.1",
+        "::1",
+        "192.168.*.*"
+      ],
+      "enabled": true,
+      "description": "Development environment client with local access",
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "key": "disabled_api_key_example",
+      "name": "Disabled Client",
+      "allowedIps": [],
+      "enabled": false,
+      "description": "Example of disabled API key",
+      "createdAt": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "globalIpWhitelist": [
+    "127.0.0.1",
+    "::1"
+  ],
+  "settings": {
+    "requireApiKey": true,
+    "enforceIpWhitelist": true,
+    "logFailedAttempts": true,
+    "rateLimitEnabled": false,
+    "rateLimitRequestsPerMinute": 60
+  },
+  "lastModified": "2025-01-01T00:00:00Z"
+}
