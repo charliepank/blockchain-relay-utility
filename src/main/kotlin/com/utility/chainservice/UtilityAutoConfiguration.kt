@@ -32,7 +32,7 @@ data class GasProperties(
     var minimumGasPriceWei: Long = 6,   // Default: 6 wei minimum
     var maxGasCostWei: Long = 540_000_000,  // Default: ~$0.014 USD max total cost
     var maxGasLimit: Long = 1_000_000,      // Default: 1M gas limit maximum
-    var maxGasPriceMultiplier: Int = 3      // Default: 3x current network gas price maximum
+    var maxGasPriceMultiplier: Int = 3      // Default: 3x current network gas price maximum (can be overridden via MAX_GAS_PRICE_MULTIPLIER env var)
 )
 
 @ConfigurationProperties(prefix = "auth")
