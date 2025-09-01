@@ -211,10 +211,99 @@ class SecurityConfigurationService(
                 return clientIp.matches(Regex(pattern))
             }
             
+            // Hostname/Docker network name support
+            if (!isValidIpAddress(allowedPattern)) {
+                return isHostnameMatching(clientIp, allowedPattern)
+            }
+            
             return false
         } catch (e: Exception) {
             logger.warn("Error matching IP $clientIp against pattern $allowedPattern", e)
             return false
+        }
+    }
+    
+    private fun isValidIpAddress(address: String): Boolean {
+        return try {
+            // Simple IPv4 pattern check
+            if (address.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"""))) {
+                return true
+            }
+            // Simple IPv6 pattern check (basic)
+            if (address.contains(":")) {
+                return true
+            }
+            false
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    private fun isHostnameMatching(clientIp: String, hostname: String): Boolean {
+        return try {
+            // Resolve hostname to IP addresses
+            val resolvedIps = resolveHostnameToIps(hostname)
+            
+            // Check if client IP matches any resolved IP
+            if (resolvedIps.contains(clientIp)) {
+                logger.debug("Client IP $clientIp matches resolved hostname $hostname")
+                return true
+            }
+            
+            // Support for Docker service names with wildcard patterns
+            if (hostname.contains("*")) {
+                val pattern = hostname.replace("*", ".*")
+                // Try reverse DNS lookup on client IP
+                val clientHostnames = resolveIpToHostnames(clientIp)
+                for (clientHostname in clientHostnames) {
+                    if (clientHostname.matches(Regex(pattern))) {
+                        logger.debug("Client hostname $clientHostname matches pattern $hostname")
+                        return true
+                    }
+                }
+            }
+            
+            false
+        } catch (e: Exception) {
+            logger.warn("Error resolving hostname $hostname for IP $clientIp", e)
+            false
+        }
+    }
+    
+    private fun resolveHostnameToIps(hostname: String): Set<String> {
+        return try {
+            val addresses = java.net.InetAddress.getAllByName(hostname)
+            val ips = addresses.map { it.hostAddress }.toSet()
+            logger.debug("Resolved hostname $hostname to IPs: $ips")
+            ips
+        } catch (e: Exception) {
+            logger.debug("Could not resolve hostname: $hostname")
+            emptySet()
+        }
+    }
+    
+    private fun resolveIpToHostnames(ip: String): Set<String> {
+        return try {
+            val address = java.net.InetAddress.getByName(ip)
+            val hostnames = mutableSetOf<String>()
+            
+            // Get canonical hostname
+            val canonicalName = address.canonicalHostName
+            if (canonicalName != ip) {
+                hostnames.add(canonicalName)
+            }
+            
+            // Get hostname (may be different from canonical)
+            val hostName = address.hostName
+            if (hostName != ip && hostName != canonicalName) {
+                hostnames.add(hostName)
+            }
+            
+            logger.debug("Resolved IP $ip to hostnames: $hostnames")
+            hostnames
+        } catch (e: Exception) {
+            logger.debug("Could not resolve IP to hostname: $ip")
+            emptySet()
         }
     }
     

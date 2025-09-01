@@ -24,6 +24,27 @@
       "createdAt": "2025-01-01T00:00:00Z"
     },
     {
+      "key": "docker_api_key_containerized",
+      "name": "Docker Services",
+      "allowedIps": [
+        "frontend-service",
+        "api-gateway",
+        "*.myapp.local",
+        "web-*"
+      ],
+      "enabled": true,
+      "description": "Docker container services with hostname-based access",
+      "createdAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "key": "their_api_key",
+      "name": "Production webapp",
+      "allowedIps": ["webapp-prod", "contractservice", "contractservice-prod"],
+      "enabled": true,
+      "description": "production webapp",
+      "createdAt": "2025-09-01T09:15:19.375152129Z"
+    },
+    {
       "key": "disabled_api_key_example",
       "name": "Disabled Client",
       "allowedIps": [],
@@ -34,7 +55,8 @@
   ],
   "globalIpWhitelist": [
     "127.0.0.1",
-    "::1"
+    "::1",
+    "localhost"
   ],
   "settings": {
     "requireApiKey": true,

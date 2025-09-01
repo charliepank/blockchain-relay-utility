@@ -170,10 +170,14 @@ The `security-config.json` file controls API key authentication and IP whitelist
 - `enabled`: Whether this API key is currently active
 - `description`: Optional description
 
-**IP Address Patterns:**
+**IP Address and Hostname Patterns:**
 - Exact IP: `"192.168.1.100"`
-- Wildcard: `"192.168.1.*"` (matches 192.168.1.0-255)
+- Wildcard IP: `"192.168.1.*"` (matches 192.168.1.0-255)
 - CIDR: `"10.0.0.0/24"` (matches 10.0.0.0-255)
+- Docker service name: `"frontend-service"`
+- Hostname with domain: `"api.myapp.local"`
+- Wildcard hostname: `"*.myapp.local"` (matches any subdomain)
+- Service pattern: `"web-*"` (matches web-1, web-frontend, etc.)
 
 **Client Usage:**
 ```bash
