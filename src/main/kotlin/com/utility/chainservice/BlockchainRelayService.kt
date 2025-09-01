@@ -450,7 +450,9 @@ class BlockchainRelayService(
             
             // Get current network gas price for comparison
             val currentNetworkGasPrice = web3j.ethGasPrice().send().gasPrice
-            val maxAllowedGasPrice = currentNetworkGasPrice.multiply(BigInteger.valueOf(blockchainProperties.gas.maxGasPriceMultiplier.toLong()))
+            // Apply multiplier properly with decimal precision (e.g., 3.2 -> 320/100)
+            val multiplierScaled = (blockchainProperties.gas.maxGasPriceMultiplier * 100).toLong()
+            val maxAllowedGasPrice = currentNetworkGasPrice.multiply(BigInteger.valueOf(multiplierScaled)).divide(BigInteger.valueOf(100))
             
             logger.info("Gas validation: operation=$operationName, userGasLimit=$userProvidedGas, expectedGasLimit=$expectedGasLimit, maxAllowedGasLimit=$gasLimitToValidate, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
 

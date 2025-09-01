@@ -32,7 +32,7 @@ data class GasProperties(
     var minimumGasPriceWei: Long = 6,   // Default: 6 wei minimum
     var maxGasCostWei: Long = 540_000_000,  // Default: ~$0.014 USD max total cost
     var maxGasLimit: Long = 1_000_000,      // Default: 1M gas limit maximum
-    var maxGasPriceMultiplier: Double = 3.0      // Default: 3x current network gas price maximum (can be overridden via MAX_GAS_PRICE_MULTIPLIER env var)
+    var maxGasPriceMultiplier: Double = 3.0  // Default: 3x current network gas price maximum
 )
 
 @ConfigurationProperties(prefix = "auth")
@@ -55,6 +55,14 @@ class UtilityAutoConfiguration(
     private val authProperties: AuthProperties,
     private val securityProperties: SecurityProperties
 ) {
+    
+    @jakarta.annotation.PostConstruct
+    fun logConfiguration() {
+        println("GAS CONFIGURATION DEBUG:")
+        println("  maxGasPriceMultiplier: ${blockchainProperties.gas.maxGasPriceMultiplier}")
+        println("  maxGasLimit: ${blockchainProperties.gas.maxGasLimit}")
+        println("  maxGasCostWei: ${blockchainProperties.gas.maxGasCostWei}")
+    }
 
     @Bean("web3j")
     @ConditionalOnMissingBean
