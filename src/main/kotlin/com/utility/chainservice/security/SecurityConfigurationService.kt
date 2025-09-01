@@ -3,6 +3,7 @@ package com.utility.chainservice.security
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.*
@@ -14,7 +15,7 @@ import kotlin.concurrent.thread
 
 @Service
 class SecurityConfigurationService(
-    private val securityConfigPath: String
+    @Qualifier("securityConfigPath") private val securityConfigPath: String
 ) {
     private val logger = LoggerFactory.getLogger(SecurityConfigurationService::class.java)
     private val objectMapper = ObjectMapper().registerKotlinModule()
