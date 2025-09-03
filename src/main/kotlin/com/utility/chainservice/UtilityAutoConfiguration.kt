@@ -2,6 +2,7 @@ package com.utility.chainservice
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -58,6 +59,7 @@ class UtilityAutoConfiguration(
     private val authProperties: AuthProperties,
     private val securityProperties: SecurityProperties
 ) {
+    private val logger = LoggerFactory.getLogger(UtilityAutoConfiguration::class.java)
     
     @jakarta.annotation.PostConstruct
     fun logConfiguration() {
@@ -84,42 +86,10 @@ class UtilityAutoConfiguration(
             "GAS_PAYER_CONTRACT_ADDRESS must be a valid Ethereum address (0x + 40 hex chars)"
         }
         
-        // Check if we should use config file
-        if (blockchainProperties.relayer.useConfigFile) {
-            // Load from relay config file
-            val privateKey = loadPrivateKeyFromConfigFile(blockchainProperties.relayer.configFilePath)
-            require(privateKey.isNotBlank()) { "Private key not found in config file: ${blockchainProperties.relayer.configFilePath}" }
-            require(privateKey.startsWith("0x") && privateKey.length == 66) { 
-                "Private key in config file must be a 64-character hex string prefixed with 0x" 
-            }
-            return Credentials.create(privateKey)
-        } else {
-            // For testing purposes, allow creating credentials with a default test private key
-            val testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
-            println("WARNING: Using test private key for relayer credentials - not for production use!")
-            return Credentials.create(testPrivateKey)
-        }
-    }
-    
-    private fun loadPrivateKeyFromConfigFile(configFilePath: String): String {
-        return try {
-            val configFile = java.io.File(configFilePath)
-            if (!configFile.exists()) {
-                throw IllegalArgumentException("Relay config file not found: $configFilePath")
-            }
-            
-            val objectMapper = ObjectMapper().registerKotlinModule()
-            val configContent = objectMapper.readTree(configFile)
-            
-            val privateKey = configContent.get("walletConfig")?.get("privateKey")?.asText()
-            if (privateKey.isNullOrBlank()) {
-                throw IllegalArgumentException("Private key not found in config file at walletConfig.privateKey")
-            }
-            
-            privateKey
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Failed to load private key from config file: ${e.message}", e)
-        }
+        // Return dummy credentials - actual credentials come from API keys via SecurityConfigurationService
+        val dummyPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+        logger.warn("Using dummy relayer credentials - actual credentials will be determined by API key")
+        return Credentials.create(dummyPrivateKey)
     }
 
     @Bean("chainId")
