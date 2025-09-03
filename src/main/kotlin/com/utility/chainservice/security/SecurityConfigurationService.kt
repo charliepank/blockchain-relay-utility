@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import kotlin.concurrent.thread
+import org.web3j.crypto.Credentials
 
 @Service
 class SecurityConfigurationService(
@@ -22,6 +23,7 @@ class SecurityConfigurationService(
     
     private val currentConfig = AtomicReference<SecurityConfiguration>()
     private val apiKeyCache = ConcurrentHashMap<String, ApiKeyConfig>()
+    private val credentialsCache = ConcurrentHashMap<String, Credentials>()
     private var watchService: WatchService? = null
     private var watchThread: Thread? = null
     
@@ -68,9 +70,21 @@ class SecurityConfigurationService(
             
             // Update cache
             apiKeyCache.clear()
+            credentialsCache.clear()
             config.apiKeys.forEach { apiKey ->
                 if (apiKey.enabled) {
                     apiKeyCache[apiKey.key] = apiKey
+                    
+                    // Cache credentials if wallet config is present
+                    apiKey.walletConfig?.let { walletConfig ->
+                        try {
+                            val credentials = Credentials.create(walletConfig.privateKey)
+                            credentialsCache[apiKey.key] = credentials
+                            logger.debug("Loaded wallet credentials for API key: ${apiKey.name}")
+                        } catch (e: Exception) {
+                            logger.error("Failed to load wallet credentials for API key ${apiKey.name}: ${e.message}")
+                        }
+                    }
                 }
             }
             
@@ -356,5 +370,9 @@ class SecurityConfigurationService(
     
     fun shouldEnforceIpWhitelist(): Boolean {
         return currentConfig.get()?.settings?.enforceIpWhitelist ?: true
+    }
+    
+    fun getCredentialsForApiKey(apiKey: String): Credentials? {
+        return credentialsCache[apiKey]
     }
 }

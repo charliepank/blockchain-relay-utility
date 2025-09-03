@@ -52,7 +52,17 @@ class ApiKeyAuthenticationFilter(
                 request.setAttribute("client.ip", clientIp)
                 request.setAttribute("client.name", validationResult.apiKeyName)
                 
-                this.logger.debug("Request authorized: client=${validationResult.apiKeyName}, ip=$clientIp")
+                // Add client credentials if available
+                apiKey?.let {
+                    val credentials = securityConfigurationService.getCredentialsForApiKey(it)
+                    if (credentials != null) {
+                        request.setAttribute("client.credentials", credentials)
+                        this.logger.debug("Request authorized with client wallet: client=${validationResult.apiKeyName}, wallet=${credentials.address}, ip=$clientIp")
+                    } else {
+                        this.logger.debug("Request authorized: client=${validationResult.apiKeyName}, ip=$clientIp (using default wallet)")
+                    }
+                } ?: this.logger.debug("Request authorized: client=${validationResult.apiKeyName}, ip=$clientIp")
+                
                 filterChain.doFilter(request, response)
             } else {
                 this.logger.warn("Unauthorized request: ip=$clientIp, error=${validationResult.error}")

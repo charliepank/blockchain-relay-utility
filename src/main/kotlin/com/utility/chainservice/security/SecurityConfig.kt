@@ -33,8 +33,19 @@ data class ApiKeyConfig(
     @JsonProperty("description")
     val description: String? = null,
     
+    @JsonProperty("walletConfig")
+    val walletConfig: WalletConfig? = null,
+    
     @JsonProperty("createdAt")
     val createdAt: String = Instant.now().toString()
+)
+
+data class WalletConfig(
+    @JsonProperty("privateKey")
+    val privateKey: String,
+    
+    @JsonProperty("address")
+    val address: String? = null
 )
 
 data class SecuritySettings(

@@ -47,6 +47,14 @@ class BlockchainRelayService(
     private val logger = LoggerFactory.getLogger(BlockchainRelayService::class.java)
 
     suspend fun relayTransaction(signedTransactionHex: String): TransactionResult {
+        logger.error("relayTransaction() method is disabled - this method spends relayer funds and breaks user transaction signatures")
+        return TransactionResult(
+            success = false,
+            transactionHash = null,
+            error = "relayTransaction() is disabled - use processTransactionWithGasTransfer() instead"
+        )
+        
+        /* DISABLED - This method was dangerous:
         return try {
             logger.info("Relaying transaction: ${signedTransactionHex.substring(0, 20)}...")
 
@@ -114,13 +122,15 @@ class BlockchainRelayService(
                 error = e.message ?: "Unknown error occurred"
             )
         }
+        */
     }
 
     suspend fun processTransactionWithGasTransfer(
         userWalletAddress: String, 
         signedTransactionHex: String, 
         operationName: String,
-        expectedGasLimit: BigInteger = BigInteger.ZERO
+        expectedGasLimit: BigInteger = BigInteger.ZERO,
+        clientCredentials: Credentials? = null
     ): TransactionResult {
         return try {
             logger.info("Processing transaction with gas transfer for user: $userWalletAddress, operation: $operationName")
@@ -182,7 +192,7 @@ class BlockchainRelayService(
                 val amountNeeded = totalAmountNeeded.subtract(currentBalance)
                 logger.info("User has $currentBalance wei, needs $totalAmountNeeded wei, transferring $amountNeeded wei")
                 
-                val gasTransferResult = transferGasToUser(actualWalletAddress, amountNeeded)
+                val gasTransferResult = transferGasToUser(actualWalletAddress, amountNeeded, clientCredentials)
                 if (!gasTransferResult.success) {
                     logger.error("Failed to transfer gas to user: ${gasTransferResult.error}")
                     return TransactionResult(
@@ -253,22 +263,44 @@ class BlockchainRelayService(
         }
     }
 
-    suspend fun transferGasToUser(userAddress: String, gasAmount: BigInteger): TransactionResult {
+    suspend fun transferGasToUser(
+        userAddress: String, 
+        gasAmount: BigInteger,
+        clientCredentials: Credentials? = null
+    ): TransactionResult {
         return try {
-            logger.info("Transferring $gasAmount wei to user: $userAddress via Gas Payer Contract")
-            
-            val contract = gasPayerContract
+            // Require client credentials - no fallback to relayer wallet
+            val credentials = clientCredentials 
                 ?: return TransactionResult(
+                    success = false,
+                    transactionHash = null,
+                    error = "Client wallet credentials required - no wallet configured for this API key"
+                )
+            
+            logger.info("Transferring $gasAmount wei to user: $userAddress via Gas Payer Contract using client wallet ${credentials.address}")
+            
+            // Load contract with the appropriate credentials
+            val contractAddress = blockchainProperties.relayer.gasPayerContractAddress
+            if (contractAddress.isBlank()) {
+                return TransactionResult(
                     success = false,
                     transactionHash = null,
                     error = "Gas Payer Contract not configured (GAS_PAYER_CONTRACT_ADDRESS missing)"
                 )
+            }
+            
+            val contract = GasPayerContract.load(
+                contractAddress,
+                web3j,
+                credentials,  // Use the client credentials (required)
+                gasProvider
+            )
             
             // Calculate fee that will be charged by the contract
             val fee = contract.calculateFee(gasAmount).send()
             val totalAmount = gasAmount.add(fee)
             
-            logger.info("Gas transfer: amount=$gasAmount wei, fee=$fee wei, total=$totalAmount wei")
+            logger.info("Gas transfer: amount=$gasAmount wei, fee=$fee wei, total=$totalAmount wei from client wallet ${credentials.address}")
             
             // Call fundAndRelay with the total amount (gas + fee)
             val receipt = contract.fundAndRelay(
