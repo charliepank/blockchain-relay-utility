@@ -21,9 +21,10 @@ class UtilityAutoConfigurationTest {
     @BeforeEach
     fun setUp() {
         val relayerProperties = RelayerProperties(
-            privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001",
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
-            gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
+            gasPayerContractAddress = "0x1234567890123456789012345678901234567890",
+            configFilePath = "./test-config.json",
+            useConfigFile = false  // Disable for tests
         )
         val gasProperties = GasProperties(
             priceMultiplier = 1.2,
@@ -67,51 +68,37 @@ class UtilityAutoConfigurationTest {
     }
 
     @Test
-    fun `should throw exception for invalid private key format`() {
-        val invalidRelayerProperties = RelayerProperties(
-            privateKey = "invalid-key",
+    fun `should use test private key when config file disabled`() {
+        val testRelayerProperties = RelayerProperties(
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
-            gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
+            gasPayerContractAddress = "0x1234567890123456789012345678901234567890",
+            useConfigFile = false
         )
-        val invalidBlockchainProperties = blockchainProperties.copy(relayer = invalidRelayerProperties)
+        val testBlockchainProperties = blockchainProperties.copy(relayer = testRelayerProperties)
         val securityProperties = SecurityProperties(enabled = false)
-        val invalidConfig = UtilityAutoConfiguration(invalidBlockchainProperties, authProperties, securityProperties)
+        val testConfig = UtilityAutoConfiguration(testBlockchainProperties, authProperties, securityProperties)
         
-        assertThrows(IllegalArgumentException::class.java) {
-            invalidConfig.relayerCredentials()
-        }
+        val credentials = testConfig.relayerCredentials()
+        assertNotNull(credentials)
+        // Test private key corresponds to this address
+        assertEquals("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf", credentials.address.lowercase())
     }
 
     @Test
-    fun `should throw exception for blank private key`() {
-        val blankRelayerProperties = RelayerProperties(
-            privateKey = "",
+    fun `should handle config file path correctly`() {
+        val configRelayerProperties = RelayerProperties(
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
-            gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
+            gasPayerContractAddress = "0x1234567890123456789012345678901234567890",
+            configFilePath = "./custom-config.json",
+            useConfigFile = false  // Use test mode
         )
-        val blankBlockchainProperties = blockchainProperties.copy(relayer = blankRelayerProperties)
+        val configBlockchainProperties = blockchainProperties.copy(relayer = configRelayerProperties)
         val securityProperties = SecurityProperties(enabled = false)
-        val blankConfig = UtilityAutoConfiguration(blankBlockchainProperties, authProperties, securityProperties)
+        val configAutoConfiguration = UtilityAutoConfiguration(configBlockchainProperties, authProperties, securityProperties)
         
-        assertThrows(IllegalArgumentException::class.java) {
-            blankConfig.relayerCredentials()
-        }
-    }
-
-    @Test
-    fun `should throw exception for short private key`() {
-        val shortRelayerProperties = RelayerProperties(
-            privateKey = "0x123",
-            walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
-            gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
-        )
-        val shortBlockchainProperties = blockchainProperties.copy(relayer = shortRelayerProperties)
-        val securityProperties = SecurityProperties(enabled = false)
-        val shortConfig = UtilityAutoConfiguration(shortBlockchainProperties, authProperties, securityProperties)
-        
-        assertThrows(IllegalArgumentException::class.java) {
-            shortConfig.relayerCredentials()
-        }
+        val credentials = configAutoConfiguration.relayerCredentials()
+        assertNotNull(credentials)
+        assertEquals("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf", credentials.address.lowercase())
     }
 
     @Test
@@ -272,12 +259,12 @@ class UtilityAutoConfigurationTest {
     @Test
     fun `should handle relayer properties correctly`() {
         val relayerProps = RelayerProperties(
-            privateKey = "0x1234567890123456789012345678901234567890123456789012345678901234",
+            // privateKey removed - using config file,
             walletAddress = "0xabcdef1234567890",
             gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         )
         
-        assertEquals("0x1234567890123456789012345678901234567890123456789012345678901234", relayerProps.privateKey)
+        assertEquals("./config/relay-config.json", relayerProps.configFilePath)
         assertEquals("0xabcdef1234567890", relayerProps.walletAddress)
     }
 
@@ -296,7 +283,7 @@ class UtilityAutoConfigurationTest {
     fun `should create default relayer properties`() {
         val defaultRelayerProps = RelayerProperties()
         
-        assertEquals("", defaultRelayerProps.privateKey)
+        assertEquals("./config/relay-config.json", defaultRelayerProps.configFilePath)
         assertEquals("", defaultRelayerProps.walletAddress)
         assertEquals("", defaultRelayerProps.gasPayerContractAddress)
     }
@@ -312,7 +299,7 @@ class UtilityAutoConfigurationTest {
     @Test
     fun `should throw exception for blank gas payer contract address`() {
         val blankContractRelayerProperties = RelayerProperties(
-            privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001",
+            // privateKey removed - using config file,
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
             gasPayerContractAddress = ""
         )
@@ -328,7 +315,7 @@ class UtilityAutoConfigurationTest {
     @Test
     fun `should throw exception for invalid gas payer contract address format`() {
         val invalidContractRelayerProperties = RelayerProperties(
-            privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001",
+            // privateKey removed - using config file,
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
             gasPayerContractAddress = "invalid-contract-address"
         )
@@ -344,7 +331,7 @@ class UtilityAutoConfigurationTest {
     @Test
     fun `should throw exception for short gas payer contract address`() {
         val shortContractRelayerProperties = RelayerProperties(
-            privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001",
+            // privateKey removed - using config file,
             walletAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf",
             gasPayerContractAddress = "0x123"
         )

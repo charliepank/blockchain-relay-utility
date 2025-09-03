@@ -18,8 +18,10 @@ class ConfigurationPropertiesTest {
     @Test
     fun `should create BlockchainProperties with custom values`() {
         val relayerProps = RelayerProperties(
-            privateKey = "0x1234567890123456789012345678901234567890123456789012345678901234",
-            walletAddress = "0xabcdef1234567890"
+            walletAddress = "0xabcdef1234567890",
+            gasPayerContractAddress = "0x1234567890123456789012345678901234567890",
+            configFilePath = "./test-config.json",
+            useConfigFile = true
         )
         val gasProps = GasProperties(
             priceMultiplier = 1.5,
@@ -43,22 +45,29 @@ class ConfigurationPropertiesTest {
     fun `should create RelayerProperties with default values`() {
         val properties = RelayerProperties()
         
-        assertEquals("", properties.privateKey)
         assertEquals("", properties.walletAddress)
+        assertEquals("", properties.gasPayerContractAddress)
+        assertEquals("./config/relay-config.json", properties.configFilePath)
+        assertEquals(true, properties.useConfigFile)
     }
 
     @Test
     fun `should create RelayerProperties with custom values`() {
-        val privateKey = "0x1234567890123456789012345678901234567890123456789012345678901234"
         val walletAddress = "0xabcdef1234567890"
+        val gasPayerContract = "0x1234567890123456789012345678901234567890"
+        val configPath = "./custom-config.json"
         
         val properties = RelayerProperties(
-            privateKey = privateKey,
-            walletAddress = walletAddress
+            walletAddress = walletAddress,
+            gasPayerContractAddress = gasPayerContract,
+            configFilePath = configPath,
+            useConfigFile = false
         )
         
-        assertEquals(privateKey, properties.privateKey)
         assertEquals(walletAddress, properties.walletAddress)
+        assertEquals(gasPayerContract, properties.gasPayerContractAddress)
+        assertEquals(configPath, properties.configFilePath)
+        assertEquals(false, properties.useConfigFile)
     }
 
     @Test
@@ -203,11 +212,11 @@ class ConfigurationPropertiesTest {
 
     @Test
     fun `should handle empty and null-like values`() {
-        val emptyRelayer = RelayerProperties("", "")
+        val emptyRelayer = RelayerProperties("", "", "", true)
         val emptyAuth = AuthProperties("", false)
         val emptyBlockchain = BlockchainProperties("", 0L, emptyRelayer, GasProperties())
         
-        assertEquals("", emptyRelayer.privateKey)
+        assertEquals("", emptyRelayer.walletAddress)
         assertEquals("", emptyRelayer.walletAddress)
         assertEquals("", emptyAuth.userServiceUrl)
         assertFalse(emptyAuth.enabled)
