@@ -1,6 +1,5 @@
 package com.utility.chainservice.plugin
 
-import com.utility.chainservice.AuthenticationProvider
 import com.utility.chainservice.BlockchainRelayService
 import io.swagger.v3.oas.models.tags.Tag
 import org.junit.jupiter.api.Test
@@ -11,13 +10,11 @@ import org.mockito.kotlin.*
 class PluginConfigurationTest {
 
     private lateinit var blockchainRelayService: BlockchainRelayService
-    private lateinit var authenticationProvider: AuthenticationProvider
     private lateinit var pluginConfiguration: PluginConfiguration
 
     @BeforeEach
     fun setUp() {
         blockchainRelayService = mock()
-        authenticationProvider = mock()
     }
 
     private open class TestPlugin(
@@ -35,7 +32,7 @@ class PluginConfigurationTest {
             return listOf(tag)
         }
         
-        override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
+        override fun initialize(relayService: BlockchainRelayService) {
             if (shouldFailInit) {
                 throw RuntimeException("Plugin initialization failed for $name")
             }
@@ -53,7 +50,7 @@ class PluginConfigurationTest {
         val plugin2 = TestPlugin("test-plugin-2")
         val plugins = listOf(plugin1, plugin2)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -74,7 +71,7 @@ class PluginConfigurationTest {
 
     @Test
     fun `should handle no plugins gracefully`() {
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Plugins list is empty by default
         
@@ -93,7 +90,7 @@ class PluginConfigurationTest {
         val badPlugin = TestPlugin("bad-plugin", shouldFailInit = true)
         val plugins = listOf(goodPlugin, badPlugin)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -117,7 +114,7 @@ class PluginConfigurationTest {
         val plugin = spy(TestPlugin("spy-plugin"))
         val plugins = listOf(plugin)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -126,7 +123,7 @@ class PluginConfigurationTest {
         
         pluginConfiguration.initializePlugins()
         
-        verify(plugin).initialize(blockchainRelayService, authenticationProvider)
+        verify(plugin).initialize(blockchainRelayService)
         assertTrue(plugin.isInitialized)
     }
 
@@ -137,7 +134,7 @@ class PluginConfigurationTest {
         val plugin3 = TestPlugin("plugin-3")
         val plugins = listOf(plugin1, plugin2, plugin3)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -161,29 +158,29 @@ class PluginConfigurationTest {
         val initOrder = mutableListOf<String>()
         
         val plugin1 = object : TestPlugin("first-plugin") {
-            override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
-                super.initialize(relayService, authProvider)
+            override fun initialize(relayService: BlockchainRelayService) {
+                super.initialize(relayService)
                 initOrder.add("first-plugin")
             }
         }
         
         val plugin2 = object : TestPlugin("second-plugin") {
-            override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
-                super.initialize(relayService, authProvider)
+            override fun initialize(relayService: BlockchainRelayService) {
+                super.initialize(relayService)
                 initOrder.add("second-plugin")
             }
         }
         
         val plugin3 = object : TestPlugin("third-plugin") {
-            override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
-                super.initialize(relayService, authProvider)
+            override fun initialize(relayService: BlockchainRelayService) {
+                super.initialize(relayService)
                 initOrder.add("third-plugin")
             }
         }
         
         val plugins = listOf(plugin1, plugin2, plugin3)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -202,7 +199,7 @@ class PluginConfigurationTest {
         val plugin3 = TestPlugin("success-plugin-2") // This should not be initialized due to failure
         val plugins = listOf(plugin1, plugin2, plugin3)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")
@@ -226,7 +223,7 @@ class PluginConfigurationTest {
         val plugin = TestPlugin("info-plugin")
         val plugins = listOf(plugin)
         
-        pluginConfiguration = PluginConfiguration(blockchainRelayService, authenticationProvider)
+        pluginConfiguration = PluginConfiguration(blockchainRelayService)
         
         // Use reflection to set the plugins list
         val pluginsField = PluginConfiguration::class.java.getDeclaredField("plugins")

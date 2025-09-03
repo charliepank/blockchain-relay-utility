@@ -2,6 +2,66 @@
 
 A generic Kotlin/Spring Boot utility for blockchain transaction relaying with gas management and pluggable business logic.
 
+## What This Library Does
+
+### Core Purpose
+This library provides **"gas station as a service"** functionality for any EVM-compatible blockchain (Ethereum, Avalanche, Polygon, BSC, Arbitrum, etc.). It allows users to execute blockchain transactions without holding native tokens by sponsoring their gas costs through a smart contract fee collection system.
+
+### Key Functionality
+
+#### 🚗 **Transaction Gas Management & Sponsorship**
+- **Decodes user-signed transactions** to extract gas requirements and validate authenticity
+- **Checks user's native token balance** (ETH, AVAX, MATIC, etc.) before sponsoring
+- **Smart funding logic**: Only transfers the difference if user has insufficient balance
+- **Automatic gas sponsorship** via Gas Payer Contract with integrated service fee collection
+- **Preserves original transaction signatures** - forwards user transactions unchanged to blockchain
+
+#### 🔐 **Multi-Tenant Security System**
+- **Hot-reloadable API key authentication** via JSON configuration file
+- **Per-API-key wallet configuration** - each client can use their own private key/funding source
+- **IP whitelisting** with support for exact IPs, wildcards, CIDR notation, and Docker service names
+- **Economic attack prevention** through configurable gas cost/limit validation
+- **Request rate limiting** and comprehensive security logging
+
+#### 🔌 **Plugin Architecture for Business Logic**
+- **Auto-discovery system** for business-specific functionality
+- **Generic utility core** handles all blockchain operations, gas management, and security
+- **Business plugins** implement custom logic without touching core infrastructure
+- **Automatic REST API generation** with OpenAPI documentation
+
+#### 🌐 **Universal Blockchain Compatibility**
+- **Any EVM-compatible network** - just configure the RPC URL
+- **Full Web3j integration** with transaction decoding/encoding
+- **EIP-1559 and legacy transaction support**
+- **Gas estimation and price calculation** with configurable multipliers
+- **Receipt monitoring** with retry logic
+
+### Transaction Flow Example
+
+1. **Client Request**: User sends signed transaction via API key-protected endpoint
+2. **Authentication**: System validates API key and loads client's wallet configuration  
+3. **Balance Check**: Checks user's current native token balance on target blockchain
+4. **Smart Funding**: If insufficient, transfers only the needed amount + service fee via Gas Payer Contract
+5. **Balance Confirmation**: Waits for user's balance to update before proceeding
+6. **Transaction Submission**: Forwards original signed transaction unchanged to blockchain
+7. **Result**: Returns transaction hash and success/failure status
+
+### Use Cases
+
+- **DApps** that want to sponsor user transactions without requiring users to hold native tokens
+- **Enterprise applications** needing controlled, secure blockchain access with custom business logic
+- **Multi-client platforms** where different customers need separate funding sources and billing
+- **Blockchain services** requiring gas abstraction with fee collection mechanisms
+
+### Benefits
+
+- **User Experience**: Users don't need native tokens to interact with blockchain
+- **Cost Efficient**: Only sponsors the exact amount needed, not fixed amounts
+- **Multi-Tenant**: Different API keys can use different funding wallets and security policies  
+- **Extensible**: Plugin system allows custom business logic without core modifications
+- **Secure**: Comprehensive authentication, IP whitelisting, and economic attack prevention
+- **Universal**: Works with any EVM-compatible blockchain network
+
 ## Quick Reference for Integration
 
 ### Essential Dependencies
@@ -78,7 +138,6 @@ fun testSubmit() {
 - **Three-Tier Gas Validation**: Validates transactions against configurable limits (total cost, gas limit, gas price)
 - **API Key & IP Whitelist Security**: Hot-reloadable JSON configuration for authentication and IP restrictions
 - **Flexible IP Patterns**: Supports exact IPs, wildcards, and CIDR notation
-- **Authentication Interface**: Pluggable authentication providers (HTTP, JWT, etc.)
 - **Plugin System**: Clean interface for implementing business-specific logic
 - **Web3j Integration**: Full Ethereum-compatible blockchain support
 - **Spring Boot Ready**: Auto-configuration and dependency injection
@@ -128,8 +187,7 @@ blockchain:
   rpcUrl: "https://api.avax-test.network/ext/bc/C/rpc"
   chainId: 43113  # Optional, auto-detected if not specified
   relayer:
-    privateKey: "0x..." # Your relayer wallet private key
-    walletAddress: "0x..." # Your relayer wallet address
+    gasPayerContractAddress: "0x..." # Gas Payer Contract address
   gas:
     priceMultiplier: 1.2           # Gas price multiplier for relayer transactions
     minimumGasPriceWei: 6          # Minimum gas price in wei
@@ -298,8 +356,6 @@ This ensures all operations must provide explicit gas limits.
 ### Core Components
 
 - **BlockchainRelayService**: Core transaction relaying and gas management
-- **AuthenticationProvider**: Interface for user authentication systems
-- **HttpAuthenticationProvider**: HTTP-based authentication implementation
 - **RelayController**: Generic utility REST endpoints
 - **PluginConfiguration**: Auto-discovery and initialization of plugins
 
@@ -326,10 +382,7 @@ interface BlockchainServicePlugin {
 ### Required Environment Variables
 
 - `RPC_URL` - Blockchain RPC endpoint
-- `RELAYER_PRIVATE_KEY` - Private key for gas-paying wallet (0x-prefixed hex)
-- `RELAYER_WALLET_ADDRESS` - Address of the relayer wallet
 - `GAS_PAYER_CONTRACT_ADDRESS` - Address of the Gas Payer Contract for fee collection
-- `USER_SERVICE_URL` - URL for user authentication service (if using HTTP auth)
 
 ### Security Configuration File
 
@@ -345,8 +398,6 @@ blockchain:
   rpcUrl: "${RPC_URL}"
   chainId: 43113  # Default: auto-detected from RPC
   relayer:
-    privateKey: "${RELAYER_PRIVATE_KEY}"
-    walletAddress: "${RELAYER_WALLET_ADDRESS}"
     gasPayerContractAddress: "${GAS_PAYER_CONTRACT_ADDRESS}"
   gas:
     priceMultiplier: 1.2  # Default: 1.2x network gas price
@@ -398,7 +449,11 @@ Create a `security-config.json` file (default location: `./config/security-confi
       "name": "Production Client",
       "allowedIps": ["192.168.1.100", "10.0.0.0/24"],
       "enabled": true,
-      "description": "Production environment client"
+      "description": "Production environment client",
+      "walletConfig": {
+        "privateKey": "0x1234567890123456789012345678901234567890123456789012345678901234",
+        "address": "0x1234567890123456789012345678901234567890"
+      }
     },
     {
       "key": "dev_api_key_12345",
@@ -427,6 +482,9 @@ Create a `security-config.json` file (default location: `./config/security-confi
 - `allowedIps`: List of allowed IP addresses/patterns (empty array = no IP restrictions)
 - `enabled`: Whether this API key is currently active
 - `description`: Optional description for documentation
+- `walletConfig` (optional): Client-specific wallet configuration for blockchain operations
+  - `privateKey`: Private key for this client's funding wallet (0x-prefixed hex, 66 chars)
+  - `address`: Wallet address for this client (for validation)
 
 **IP Address Patterns:**
 - **Exact IP**: `"192.168.1.100"`
@@ -439,6 +497,21 @@ Create a `security-config.json` file (default location: `./config/security-confi
 - `logFailedAttempts`: Log authentication failures
 - `rateLimitEnabled`: Enable rate limiting (future feature)
 - `rateLimitRequestsPerMinute`: Requests per minute limit
+
+#### Per-API-Key Wallet System
+
+The library supports **client-specific wallets** for multi-tenant blockchain operations:
+
+- **With `walletConfig`**: Client uses their own private key/wallet to fund transactions
+- **Without `walletConfig`**: Transaction will fail (no default/shared wallet)
+- **Hot-reloadable**: Wallet configurations can be updated without server restart
+- **Secure**: Each client controls their own funding source and transaction costs
+
+This architecture allows different customers to:
+- Use separate funding sources
+- Have independent cost control
+- Maintain isolated blockchain operations
+- Scale independently without shared wallet limitations
 
 #### Client Usage Examples
 
@@ -482,62 +555,26 @@ When `logFailedAttempts` is enabled, the service logs:
 - Authentication errors
 - Successful authentications (debug level)
 
-### Legacy Authentication System
 
-The utility also supports pluggable authentication for backward compatibility:
-
-### HTTP Authentication (Default)
-
-```kotlin
-import com.utility.chainservice.AuthenticationProvider
-import com.utility.chainservice.HttpAuthenticationProvider
-import org.springframework.context.annotation.Bean
-
-@Bean
-fun authenticationProvider(): AuthenticationProvider {
-    return HttpAuthenticationProvider(
-        userServiceUrl = "https://your-user-service.com",
-        enabled = true
-    )
-}
-```
-
-### Custom Authentication
-
-```kotlin
-import com.utility.chainservice.AuthenticationProvider
-import com.utility.chainservice.models.AuthenticationResult
-import org.springframework.stereotype.Component
-import reactor.core.publisher.Mono
-
-@Component
-class CustomAuthProvider : AuthenticationProvider {
-    override fun validateToken(authToken: String, httpOnlyToken: String?): Mono<AuthenticationResult> {
-        // Your custom authentication logic
-    }
-    
-    override fun isAuthEnabled(): Boolean = true
-}
-```
 
 ## Gas Management
 
 The utility automatically:
 1. **Validates gas limits** - Prevents economic attacks by checking gas limits and costs against configurable maximums
 2. **Calculates exact gas costs** from user-signed transactions  
-3. **Transfers AVAX** to user wallets if insufficient balance
+3. **Transfers native tokens** to user wallets if insufficient balance
 4. **Forwards original signed transactions** unchanged
 5. **Handles both transaction types** - Legacy and EIP-1559 transactions
 
 ### Gas Validation Security
 
 The utility protects against economic attacks by validating:
-- **Maximum total cost** - Prevents draining the relayer wallet with expensive transactions
+- **Maximum total cost** - Prevents excessive transaction costs
 - **Maximum gas limit** - Prevents excessive gas usage
 - **Maximum gas price** - Prevents paying unreasonable gas prices (based on current network price)
 
 **Why not gas estimation?** 
-Many smart contracts have access controls (e.g., "only buyer can call"), making gas estimation impossible since the relayer wallet can't execute the user's transaction for estimation. Instead, the utility uses configurable limits to prevent abuse while trusting that modern wallets provide reasonable gas estimates.
+Many smart contracts have access controls (e.g., "only buyer can call"), making gas estimation impossible since the funding wallet can't execute the user's transaction for estimation. Instead, the utility uses configurable limits to prevent abuse while trusting that modern wallets provide reasonable gas estimates.
 
 ## Core API Methods
 
@@ -587,14 +624,14 @@ suspend fun relayTransaction(signedTransactionHex: String): TransactionResult
 ```
 
 **What it does:**
-- ❌ **RECONSTRUCTS the transaction** with relayer's credentials (nonce, gas, signature)
+- ❌ **RECONSTRUCTS the transaction** with different credentials (nonce, gas, signature)
 - ❌ **INVALIDATES the original user signature**
-- ❌ **CHANGES the transaction sender** to the relayer wallet
-- ⚠️ **Only works if relayer is authorized** to execute the transaction
+- ❌ **CHANGES the transaction sender** to the funding wallet
+- ⚠️ **Only works if funding wallet is authorized** to execute the transaction
 
 **Use this ONLY when:** 
-- The relayer wallet owns/controls the transaction
-- You want to reconstruct a transaction template with relayer credentials
+- The funding wallet owns/controls the transaction
+- You want to reconstruct a transaction template with different credentials
 - **NEVER use for user-signed transactions from wallets**
 
 **Common Mistake:**
@@ -852,8 +889,7 @@ blockchain:
   rpcUrl: "${RPC_URL}"
   chainId: 43113
   relayer:
-    privateKey: "${RELAYER_PRIVATE_KEY}"
-    walletAddress: "${RELAYER_WALLET_ADDRESS}"
+    gasPayerContractAddress: "${GAS_PAYER_CONTRACT_ADDRESS}"
 
 # Your business properties (separate prefix)
 my-service:
@@ -956,25 +992,9 @@ No blockchain service plugins found
 - Verify your plugin class is annotated with `@Component`
 - Check that your plugin implements `BlockchainServicePlugin`
 
-#### 5. Authentication Integration Issues
-```
-AuthenticationProvider bean not found
-```
+#### 5. Authentication System Changes
 
-**Cause**: No authentication provider configured or conflicting authentication setup.
-
-**Solution**: Either configure the default HTTP authentication provider or implement a custom one:
-
-```kotlin
-import com.utility.chainservice.AuthenticationProvider
-import com.utility.chainservice.HttpAuthenticationProvider
-import org.springframework.context.annotation.Bean
-
-@Bean  
-fun authenticationProvider(): AuthenticationProvider {
-    return HttpAuthenticationProvider(userServiceUrl, enabled = true)
-}
-```
+The token-based authentication system has been removed. The library now uses only API key authentication with security configuration files. Remove any `AuthenticationProvider` or `HttpAuthenticationProvider` beans from your configuration.
 
 ### Debug Tips
 

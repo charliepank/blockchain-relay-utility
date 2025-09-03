@@ -18,8 +18,7 @@ class ConfigurationPropertiesTest {
     @Test
     fun `should create BlockchainProperties with custom values`() {
         val relayerProps = RelayerProperties(
-            privateKey = "0x1234567890123456789012345678901234567890123456789012345678901234",
-            walletAddress = "0xabcdef1234567890"
+            gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         )
         val gasProps = GasProperties(
             priceMultiplier = 1.5,
@@ -43,22 +42,18 @@ class ConfigurationPropertiesTest {
     fun `should create RelayerProperties with default values`() {
         val properties = RelayerProperties()
         
-        assertEquals("", properties.privateKey)
-        assertEquals("", properties.walletAddress)
+        assertEquals("", properties.gasPayerContractAddress)
     }
 
     @Test
     fun `should create RelayerProperties with custom values`() {
-        val privateKey = "0x1234567890123456789012345678901234567890123456789012345678901234"
-        val walletAddress = "0xabcdef1234567890"
+        val gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
         
         val properties = RelayerProperties(
-            privateKey = privateKey,
-            walletAddress = walletAddress
+            gasPayerContractAddress = gasPayerContractAddress
         )
         
-        assertEquals(privateKey, properties.privateKey)
-        assertEquals(walletAddress, properties.walletAddress)
+        assertEquals(gasPayerContractAddress, properties.gasPayerContractAddress)
     }
 
     @Test
@@ -83,31 +78,11 @@ class ConfigurationPropertiesTest {
         assertEquals(minimumGasPriceWei, properties.minimumGasPriceWei)
     }
 
-    @Test
-    fun `should create AuthProperties with default values`() {
-        val properties = AuthProperties()
-        
-        assertEquals("", properties.userServiceUrl)
-        assertTrue(properties.enabled)
-    }
 
-    @Test
-    fun `should create AuthProperties with custom values`() {
-        val userServiceUrl = "https://user-service.example.com"
-        val enabled = false
-        
-        val properties = AuthProperties(
-            userServiceUrl = userServiceUrl,
-            enabled = enabled
-        )
-        
-        assertEquals(userServiceUrl, properties.userServiceUrl)
-        assertEquals(enabled, properties.enabled)
-    }
 
     @Test
     fun `should handle BlockchainProperties equality`() {
-        val relayerProps = RelayerProperties("key1", "addr1")
+        val relayerProps = RelayerProperties("0x1234567890123456789012345678901234567890")
         val gasProps = GasProperties(1.5, 10L)
         
         val props1 = BlockchainProperties("url1", 1L, relayerProps, gasProps)
@@ -120,9 +95,9 @@ class ConfigurationPropertiesTest {
 
     @Test
     fun `should handle RelayerProperties equality`() {
-        val props1 = RelayerProperties("key1", "addr1")
-        val props2 = RelayerProperties("key1", "addr1")
-        val props3 = RelayerProperties("key2", "addr1")
+        val props1 = RelayerProperties("0x1234567890123456789012345678901234567890")
+        val props2 = RelayerProperties("0x1234567890123456789012345678901234567890")
+        val props3 = RelayerProperties("0xabcdef1234567890123456789012345678901234")
         
         assertEquals(props1, props2)
         assertNotEquals(props1, props3)
@@ -138,43 +113,27 @@ class ConfigurationPropertiesTest {
         assertNotEquals(props1, props3)
     }
 
-    @Test
-    fun `should handle AuthProperties equality`() {
-        val props1 = AuthProperties("url1", true)
-        val props2 = AuthProperties("url1", true)
-        val props3 = AuthProperties("url1", false)
-        
-        assertEquals(props1, props2)
-        assertNotEquals(props1, props3)
-    }
 
     @Test
     fun `should generate consistent hash codes`() {
-        val relayerProps = RelayerProperties("key1", "addr1")
+        val relayerProps = RelayerProperties("0x1234567890123456789012345678901234567890")
         val gasProps = GasProperties(1.5, 10L)
         val blockchainProps1 = BlockchainProperties("url1", 1L, relayerProps, gasProps)
         val blockchainProps2 = BlockchainProperties("url1", 1L, relayerProps, gasProps)
         
         assertEquals(blockchainProps1.hashCode(), blockchainProps2.hashCode())
         
-        val authProps1 = AuthProperties("url1", true)
-        val authProps2 = AuthProperties("url1", true)
-        
-        assertEquals(authProps1.hashCode(), authProps2.hashCode())
     }
 
     @Test
     fun `should provide meaningful toString representations`() {
-        val relayerProps = RelayerProperties("testKey", "testAddr")
+        val relayerProps = RelayerProperties("0x1234567890123456789012345678901234567890")
         val gasProps = GasProperties(1.5, 10L)
         val blockchainProps = BlockchainProperties("testUrl", 1L, relayerProps, gasProps)
-        val authProps = AuthProperties("testUserUrl", false)
         
         val blockchainString = blockchainProps.toString()
-        val authString = authProps.toString()
         
         assertTrue(blockchainString.contains("BlockchainProperties"))
-        assertTrue(authString.contains("AuthProperties"))
     }
 
     @Test
@@ -203,14 +162,10 @@ class ConfigurationPropertiesTest {
 
     @Test
     fun `should handle empty and null-like values`() {
-        val emptyRelayer = RelayerProperties("", "")
-        val emptyAuth = AuthProperties("", false)
+        val emptyRelayer = RelayerProperties("")
         val emptyBlockchain = BlockchainProperties("", 0L, emptyRelayer, GasProperties())
         
-        assertEquals("", emptyRelayer.privateKey)
-        assertEquals("", emptyRelayer.walletAddress)
-        assertEquals("", emptyAuth.userServiceUrl)
-        assertFalse(emptyAuth.enabled)
+        assertEquals("", emptyRelayer.gasPayerContractAddress)
         assertEquals("", emptyBlockchain.rpcUrl)
         assertEquals(0L, emptyBlockchain.chainId)
     }

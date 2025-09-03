@@ -1,6 +1,5 @@
 package com.utility.chainservice.plugin
 
-import com.utility.chainservice.AuthenticationProvider
 import com.utility.chainservice.BlockchainRelayService
 import io.swagger.v3.oas.models.tags.Tag
 import org.junit.jupiter.api.Test
@@ -21,7 +20,7 @@ class BlockchainServicePluginTest {
             }
         )
         
-        override fun initialize(relayService: BlockchainRelayService, authProvider: AuthenticationProvider) {
+        override fun initialize(relayService: BlockchainRelayService) {
             isInitialized = true
         }
         
@@ -47,11 +46,10 @@ class BlockchainServicePluginTest {
     fun `should initialize plugin with services`() {
         val plugin = TestPlugin()
         val mockRelayService = mock<BlockchainRelayService>()
-        val mockAuthProvider = mock<AuthenticationProvider>()
         
         assertFalse(plugin.isInitialized)
         
-        plugin.initialize(mockRelayService, mockAuthProvider)
+        plugin.initialize(mockRelayService)
         
         assertTrue(plugin.isInitialized)
     }

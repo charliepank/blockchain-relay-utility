@@ -63,13 +63,12 @@ The utility implements a plugin architecture where:
 
 ### Required Environment Variables
 - `RPC_URL`: Blockchain RPC endpoint (e.g., Avalanche network)
-- `RELAYER_PRIVATE_KEY`: Private key for gas-paying wallet (0x-prefixed hex, 66 chars)
-- `RELAYER_WALLET_ADDRESS`: Address of the relayer wallet
 - `GAS_PAYER_CONTRACT_ADDRESS`: Address of the Gas Payer Contract for fee collection (0x-prefixed hex, 42 chars)
-- `USER_SERVICE_URL`: URL for user authentication service (if using HTTP auth)
 
 ### Security Configuration File
-The service uses a JSON configuration file for API key and IP whitelist management. By default, this file should be located at `./config/security-config.json`, but the path is configurable.
+The service uses a JSON configuration file for API key and IP whitelist management, including **per-API-key wallet configuration**. By default, this file should be located at `./config/security-config.json`, but the path is configurable.
+
+Each API key can optionally have its own private key/wallet for blockchain operations, allowing different clients to use different funding sources.
 
 ### Application Configuration (application.yml)
 ```yaml
@@ -77,8 +76,6 @@ blockchain:
   rpc-url: "${RPC_URL}"
   chain-id: 43113  # Auto-detected from RPC if not specified
   relayer:
-    private-key: "${RELAYER_PRIVATE_KEY}"
-    wallet-address: "${RELAYER_WALLET_ADDRESS}"
     gas-payer-contract-address: "${GAS_PAYER_CONTRACT_ADDRESS}"
   gas:
     price-multiplier: 1.2  # Multiply network gas price by this factor (default: 1.2)
@@ -87,9 +84,6 @@ blockchain:
     max-gas-limit: 1000000  # Maximum gas limit allowed (default: 1M)
     max-gas-price-multiplier: 3  # Maximum gas price as multiplier of current network price (default: 3x)
 
-auth:
-  user-service-url: "${USER_SERVICE_URL}"
-  enabled: true  # Set to false to disable authentication
 
 security:
   enabled: true  # Set to false to disable API key security
@@ -114,10 +108,6 @@ security:
 - **File Watcher**: Automatically detects configuration file changes and reloads security settings
 - **Security Logging**: Configurable logging of authentication attempts and failures
 
-### Legacy Authentication System
-- Pluggable authentication via `AuthenticationProvider` interface  
-- HTTP-based authentication using external user service
-- JWT token validation with reactive (Mono) responses
 
 ### Plugin Development
 To create a plugin:
@@ -149,7 +139,11 @@ The `security-config.json` file controls API key authentication and IP whitelist
       "name": "Client Name",
       "allowedIps": ["192.168.1.100", "10.0.0.0/24"],
       "enabled": true,
-      "description": "Description of this client"
+      "description": "Description of this client",
+      "walletConfig": {
+        "privateKey": "0x1234567890123456789012345678901234567890123456789012345678901234",
+        "address": "0x1234567890123456789012345678901234567890"
+      }
     }
   ],
   "globalIpWhitelist": ["127.0.0.1", "::1"],
@@ -169,6 +163,9 @@ The `security-config.json` file controls API key authentication and IP whitelist
 - `allowedIps`: List of allowed IP addresses/patterns (empty = no restrictions)
 - `enabled`: Whether this API key is currently active
 - `description`: Optional description
+- `walletConfig` (optional): Client-specific wallet configuration
+  - `privateKey`: Private key for this client's wallet (0x-prefixed hex, 66 chars)
+  - `address`: Wallet address for this client
 
 **IP Address and Hostname Patterns:**
 - Exact IP: `"192.168.1.100"`

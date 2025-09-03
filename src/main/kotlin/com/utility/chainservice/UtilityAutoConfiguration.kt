@@ -22,8 +22,6 @@ data class BlockchainProperties(
 )
 
 data class RelayerProperties(
-    var privateKey: String = "",
-    var walletAddress: String = "",
     var gasPayerContractAddress: String = ""  // Gas payer contract address for fee collection
 )
 
@@ -35,11 +33,6 @@ data class GasProperties(
     var maxGasPriceMultiplier: Double = 3.0  // Default: 3x current network gas price maximum
 )
 
-@ConfigurationProperties(prefix = "auth")
-data class AuthProperties(
-    var userServiceUrl: String = "",
-    var enabled: Boolean = true
-)
 
 @ConfigurationProperties(prefix = "security")
 data class SecurityProperties(
@@ -48,11 +41,10 @@ data class SecurityProperties(
 )
 
 @Configuration
-@EnableConfigurationProperties(BlockchainProperties::class, AuthProperties::class, SecurityProperties::class)
+@EnableConfigurationProperties(BlockchainProperties::class, SecurityProperties::class)
 @ComponentScan(basePackages = ["com.utility.chainservice"])
 class UtilityAutoConfiguration(
     private val blockchainProperties: BlockchainProperties,
-    private val authProperties: AuthProperties,
     private val securityProperties: SecurityProperties
 ) {
     
@@ -71,23 +63,14 @@ class UtilityAutoConfiguration(
         return Web3j.build(HttpService(blockchainProperties.rpcUrl))
     }
 
-    @Bean("relayerCredentials")
-    @ConditionalOnMissingBean
-    fun relayerCredentials(): Credentials {
-        val privateKey = blockchainProperties.relayer.privateKey
-        require(privateKey.isNotBlank()) { "RELAYER_PRIVATE_KEY is required" }
-        require(privateKey.startsWith("0x") && privateKey.length == 66) { 
-            "RELAYER_PRIVATE_KEY must be a 64-character hex string prefixed with 0x" 
-        }
-        
+    @jakarta.annotation.PostConstruct
+    fun validateConfiguration() {
         // Validate gas payer contract address
         val gasPayerContract = blockchainProperties.relayer.gasPayerContractAddress
         require(gasPayerContract.isNotBlank()) { "GAS_PAYER_CONTRACT_ADDRESS is required" }
         require(gasPayerContract.startsWith("0x") && gasPayerContract.length == 42) {
             "GAS_PAYER_CONTRACT_ADDRESS must be a valid Ethereum address (0x + 40 hex chars)"
         }
-        
-        return Credentials.create(privateKey)
     }
 
     @Bean("chainId")
@@ -128,14 +111,6 @@ class UtilityAutoConfiguration(
         }
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    fun authenticationProvider(): AuthenticationProvider {
-        return HttpAuthenticationProvider(
-            userServiceUrl = authProperties.userServiceUrl,
-            enabled = authProperties.enabled
-        )
-    }
 
     @Bean
     @ConditionalOnMissingBean

@@ -2,16 +2,11 @@ blockchain:
   rpc-url: "https://api.avax-test.network/ext/bc/C/rpc"
   chain-id: 43113
   relayer:
-    private-key: "0x0000000000000000000000000000000000000000000000000000000000000001"
-    wallet-address: "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
     gas-payer-contract-address: "0x1234567890123456789012345678901234567890"
   gas:
     price-multiplier: 1.2
     minimum-gas-price-wei: 6
 
-auth:
-  user-service-url: "http://localhost:8081"
-  enabled: false
 
 security:
   enabled: false  # Disable security for tests

@@ -22,27 +22,11 @@ import java.math.RoundingMode
 @Service
 class BlockchainRelayService(
     private val web3j: Web3j,
-    private val relayerCredentials: Credentials,
     private val gasProvider: ContractGasProvider,
     private val chainId: Long,
     private val blockchainProperties: BlockchainProperties
 ) {
 
-    private val gasPayerContract: GasPayerContract? by lazy {
-        val contractAddress = blockchainProperties.relayer.gasPayerContractAddress
-        if (contractAddress.isNotBlank()) {
-            logger.info("Initializing Gas Payer Contract at address: $contractAddress")
-            GasPayerContract.load(
-                contractAddress,
-                web3j,
-                relayerCredentials,
-                gasProvider
-            )
-        } else {
-            logger.warn("Gas Payer Contract address not configured, direct transfers will fail")
-            null
-        }
-    }
 
     private val logger = LoggerFactory.getLogger(BlockchainRelayService::class.java)
 
@@ -62,7 +46,7 @@ class BlockchainRelayService(
             val decodedTx = txInfo.transaction
             
             val nonce = web3j.ethGetTransactionCount(
-                relayerCredentials.address,
+                "0x0000000000000000000000000000000000000000", // disabled method
                 DefaultBlockParameterName.PENDING
             ).send().transactionCount
 
@@ -81,7 +65,7 @@ class BlockchainRelayService(
             val signedTransaction = org.web3j.crypto.TransactionEncoder.signMessage(
                 rawTransaction,
                 chainId,
-                relayerCredentials
+                null // disabled method
             )
 
             val transactionHash = web3j.ethSendRawTransaction(

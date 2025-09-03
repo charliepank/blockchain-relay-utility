@@ -1,6 +1,5 @@
 package com.utility.chainservice.plugin
 
-import com.utility.chainservice.AuthenticationProvider
 import com.utility.chainservice.BlockchainRelayService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -9,8 +8,7 @@ import jakarta.annotation.PostConstruct
 
 @Configuration
 class PluginConfiguration(
-    private val blockchainRelayService: BlockchainRelayService,
-    private val authenticationProvider: AuthenticationProvider
+    private val blockchainRelayService: BlockchainRelayService
 ) {
 
     private val logger = LoggerFactory.getLogger(PluginConfiguration::class.java)
@@ -25,7 +23,7 @@ class PluginConfiguration(
         plugins.forEach { plugin ->
             try {
                 logger.info("Initializing plugin: ${plugin.getPluginName()}")
-                plugin.initialize(blockchainRelayService, authenticationProvider)
+                plugin.initialize(blockchainRelayService)
                 logger.info("Successfully initialized plugin: ${plugin.getPluginName()}")
             } catch (e: Exception) {
                 logger.error("Failed to initialize plugin: ${plugin.getPluginName()}", e)
