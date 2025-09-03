@@ -46,23 +46,26 @@ class BlockchainRelayService(
 
     private val logger = LoggerFactory.getLogger(BlockchainRelayService::class.java)
 
-    suspend fun relayTransaction(signedTransactionHex: String): TransactionResult {
-        logger.error("relayTransaction() method is disabled - this method spends relayer funds and breaks user transaction signatures")
-        return TransactionResult(
-            success = false,
-            transactionHash = null,
-            error = "relayTransaction() is disabled - use processTransactionWithGasTransfer() instead"
-        )
-        
-        /* DISABLED - This method was dangerous:
+    suspend fun relayTransaction(
+        signedTransactionHex: String,
+        clientCredentials: Credentials? = null
+    ): TransactionResult {
         return try {
-            logger.info("Relaying transaction: ${signedTransactionHex.substring(0, 20)}...")
+            // Require client credentials - no fallback to relayer wallet
+            val credentials = clientCredentials 
+                ?: return TransactionResult(
+                    success = false,
+                    transactionHash = null,
+                    error = "Client wallet credentials required - no wallet configured for this API key"
+                )
+            
+            logger.info("Relaying transaction: ${signedTransactionHex.substring(0, 20)}... using client wallet ${credentials.address}")
 
             val txInfo = decodeTransactionWithSender(signedTransactionHex, "")
             val decodedTx = txInfo.transaction
             
             val nonce = web3j.ethGetTransactionCount(
-                relayerCredentials.address,
+                credentials.address,
                 DefaultBlockParameterName.PENDING
             ).send().transactionCount
 
@@ -81,7 +84,7 @@ class BlockchainRelayService(
             val signedTransaction = org.web3j.crypto.TransactionEncoder.signMessage(
                 rawTransaction,
                 chainId,
-                relayerCredentials
+                credentials
             )
 
             val transactionHash = web3j.ethSendRawTransaction(
@@ -122,7 +125,6 @@ class BlockchainRelayService(
                 error = e.message ?: "Unknown error occurred"
             )
         }
-        */
     }
 
     suspend fun processTransactionWithGasTransfer(
