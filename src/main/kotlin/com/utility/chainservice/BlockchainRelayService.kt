@@ -4,6 +4,8 @@ import com.utility.chainservice.models.OperationGasCost
 import com.utility.chainservice.models.TransactionResult
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.RawTransaction
 import org.web3j.crypto.SignedRawTransaction
@@ -168,40 +170,15 @@ class BlockchainRelayService(
             
             logger.info("Transaction requires: gasLimit=$userGasLimit, gasCost=$gasCost wei (with ${blockchainProperties.gas.priceMultiplier}x multiplier), transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
 
-            // Check user's current AVAX balance
-            val currentBalance = web3j.ethGetBalance(actualWalletAddress, DefaultBlockParameterName.LATEST).send().balance
-            
-            // Only transfer if user doesn't have enough for the entire transaction
-            if (currentBalance < totalAmountNeeded) {
-                val amountNeeded = totalAmountNeeded.subtract(currentBalance)
-                logger.info("User has $currentBalance wei, needs $totalAmountNeeded wei, transferring $amountNeeded wei")
-                
-                val gasTransferResult = transferGasToUser(actualWalletAddress, amountNeeded, clientCredentials)
-                if (!gasTransferResult.success) {
-                    logger.error("Failed to transfer gas to user: ${gasTransferResult.error}")
-                    return TransactionResult(
-                        success = false,
-                        transactionHash = null,
-                        error = "Failed to transfer gas to user: ${gasTransferResult.error}",
-                        contractAddress = decodedTx.to
-                    )
-                }
-                
-                // Wait for balance to update with retry mechanism
-                val updatedBalance = waitForBalanceUpdate(actualWalletAddress, currentBalance, totalAmountNeeded)
-                if (updatedBalance == null) {
-                    logger.error("Balance update timeout after gas transfer")
-                    return TransactionResult(
-                        success = false,
-                        transactionHash = null,
-                        error = "Balance update timeout after gas transfer",
-                        contractAddress = decodedTx.to
-                    )
-                }
-                
-                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
-            } else {
-                logger.info("User already has sufficient balance ($currentBalance wei >= $totalAmountNeeded wei), skipping transfer")
+            // Handle conditional funding if needed
+            val fundingResult = conditionalFunding(actualWalletAddress, totalAmountNeeded, clientCredentials)
+            if (!fundingResult.success) {
+                return TransactionResult(
+                    success = false,
+                    transactionHash = null,
+                    error = fundingResult.error,
+                    contractAddress = decodedTx.to
+                )
             }
 
             // Forward the original signed transaction unchanged
@@ -314,6 +291,74 @@ class BlockchainRelayService(
                 success = false,
                 transactionHash = null,
                 error = e.message ?: "Unknown error occurred"
+            )
+        }
+    }
+
+    suspend fun conditionalFunding(
+        walletAddress: String,
+        totalAmountNeededWei: BigInteger
+    ): TransactionResult {
+        val clientCredentials = try {
+            val requestAttributes = RequestContextHolder.currentRequestAttributes() as ServletRequestAttributes
+            requestAttributes.request.getAttribute("client.credentials") as? Credentials
+        } catch (e: Exception) {
+            logger.warn("Could not retrieve client credentials from request context: ${e.message}")
+            null
+        }
+        return conditionalFunding(walletAddress, totalAmountNeededWei, clientCredentials)
+    }
+
+    private suspend fun conditionalFunding(
+        walletAddress: String,
+        totalAmountNeededWei: BigInteger,
+        clientCredentials: Credentials?
+    ): TransactionResult {
+        return try {
+            // Check user's current AVAX balance
+            val currentBalance = web3j.ethGetBalance(walletAddress, DefaultBlockParameterName.LATEST).send().balance
+            
+            // Only transfer if user doesn't have enough for the entire transaction
+            if (currentBalance < totalAmountNeededWei) {
+                val amountNeeded = totalAmountNeededWei.subtract(currentBalance)
+                logger.info("User has $currentBalance wei, needs $totalAmountNeededWei wei, transferring $amountNeeded wei")
+                
+                val gasTransferResult = transferGasToUser(walletAddress, amountNeeded, clientCredentials)
+                if (!gasTransferResult.success) {
+                    logger.error("Failed to transfer gas to user: ${gasTransferResult.error}")
+                    return TransactionResult(
+                        success = false,
+                        transactionHash = null,
+                        error = "Failed to transfer gas to user: ${gasTransferResult.error}",
+                        contractAddress = null
+                    )
+                }
+                
+                // Wait for balance to update with retry mechanism
+                val updatedBalance = waitForBalanceUpdate(walletAddress, currentBalance, totalAmountNeededWei)
+                if (updatedBalance == null) {
+                    logger.error("Balance update timeout after gas transfer")
+                    return TransactionResult(
+                        success = false,
+                        transactionHash = null,
+                        error = "Balance update timeout after gas transfer",
+                        contractAddress = null
+                    )
+                }
+                
+                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
+            } else {
+                logger.info("User already has sufficient balance ($currentBalance wei >= $totalAmountNeededWei wei), skipping transfer")
+            }
+            
+            TransactionResult(success = true, transactionHash = null, error = null, contractAddress = null)
+        } catch (e: Exception) {
+            logger.error("Error during conditional funding", e)
+            TransactionResult(
+                success = false,
+                transactionHash = null,
+                error = "Conditional funding failed: ${e.message}",
+                contractAddress = null
             )
         }
     }
