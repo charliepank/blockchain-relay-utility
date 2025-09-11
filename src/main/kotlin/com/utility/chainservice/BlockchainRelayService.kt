@@ -339,16 +339,39 @@ class BlockchainRelayService(
             // Check user's current AVAX balance
             val currentBalance = web3j.ethGetBalance(walletAddress, DefaultBlockParameterName.LATEST).send().balance
             
-            // Calculate what we need for gas + transaction value (user pays the fee)
+            // Calculate what we need for gas + transaction value
             val totalNeededForTransaction = exactGasCost.add(transactionValue)
             
             // Only transfer if user doesn't have enough for the gas + transaction value
             if (currentBalance < totalNeededForTransaction) {
-                // We need to fund the user with enough for their transaction
-                // The deficit should be treated as the gas amount to transfer
-                val gasAmountToTransfer = totalNeededForTransaction.subtract(currentBalance)
+                // Calculate the base amount we need to transfer
+                val baseAmountNeeded = totalNeededForTransaction.subtract(currentBalance)
                 
-                logger.info("User has $currentBalance wei, needs $totalNeededForTransaction wei for transaction, transferring $gasAmountToTransfer wei as gas")
+                // Calculate the service fee that will be charged on this amount
+                val estimatedFee = try {
+                    if (clientCredentials != null) {
+                        val contract = GasPayerContract.load(
+                            blockchainProperties.relayer.gasPayerContractAddress,
+                            web3j,
+                            clientCredentials,
+                            gasProvider
+                        )
+                        contract.calculateFee(baseAmountNeeded).send()
+                    } else {
+                        // Fallback: estimate 5% fee if no credentials available
+                        baseAmountNeeded.multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(100))
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Could not calculate service fee for funding, using estimate: ${e.message}")
+                    // Fallback: estimate 5% fee if contract call fails
+                    baseAmountNeeded.multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(100))
+                }
+                
+                // We need to account for the fee when calculating how much to request
+                // If user needs X and there's a fee of F, we need to transfer (X + F) so user gets X
+                val gasAmountToTransfer = baseAmountNeeded.add(estimatedFee)
+                
+                logger.info("User has $currentBalance wei, needs $totalNeededForTransaction wei for transaction, transferring $gasAmountToTransfer wei as gas (includes estimated fee $estimatedFee wei)")
                 
                 val gasTransferResult = transferGasToUser(walletAddress, gasAmountToTransfer, clientCredentials)
                 if (!gasTransferResult.success) {
