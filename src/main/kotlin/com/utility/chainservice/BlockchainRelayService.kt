@@ -26,11 +26,35 @@ class BlockchainRelayService(
     private val web3j: Web3j,
     private val gasProvider: ContractGasProvider,
     private val chainId: Long,
-    private val blockchainProperties: BlockchainProperties
+    private val blockchainProperties: BlockchainProperties,
+    private val cryptoPriceService: CryptoPriceService? = null
 ) {
 
 
     private val logger = LoggerFactory.getLogger(BlockchainRelayService::class.java)
+    
+    private suspend fun formatGasAmount(weiAmount: BigInteger): String {
+        return try {
+            if (cryptoPriceService == null) {
+                return "$weiAmount wei"
+            }
+            
+            val nativeCoin = cryptoPriceService.getNativeCoinSymbol(chainId.toInt())
+            val nativeAmount = BigDecimal(weiAmount).divide(BigDecimal("1000000000000000000"), 18, RoundingMode.HALF_UP)
+            
+            // Format in scientific notation
+            val nativeFormatted = "%.2E".format(nativeAmount)
+            
+            // Get USD value (this already handles failures gracefully)
+            val usdValue = cryptoPriceService.convertWeiToUsd(weiAmount.toString(), chainId.toInt())
+            val usdFormatted = "%.2E".format(usdValue)
+            
+            "$nativeCoin:$nativeFormatted(USD:$usdFormatted)"
+        } catch (e: Exception) {
+            logger.debug("Failed to format gas amount with prices: ${e.message}")
+            "$weiAmount wei"
+        }
+    }
 
     suspend fun relayTransaction(signedTransactionHex: String): TransactionResult {
         logger.error("relayTransaction() method is disabled - this method spends relayer funds and breaks user transaction signatures")
@@ -188,7 +212,12 @@ class BlockchainRelayService(
             // Total amount needed = exact gas cost + service fee + transaction value
             val totalAmountNeeded = exactGasCost.add(serviceFee).add(transactionValue)
             
-            logger.info("Transaction requires: gasLimit=$userGasLimit, exactGasCost=$exactGasCost wei, serviceFee=$serviceFee wei, transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
+            val gasCostFormatted = formatGasAmount(exactGasCost)
+            val serviceFeeFormatted = formatGasAmount(serviceFee)
+            val transactionValueFormatted = formatGasAmount(transactionValue)
+            val totalNeededFormatted = formatGasAmount(totalAmountNeeded)
+            
+            logger.info("Transaction requires: gasLimit=$userGasLimit, exactGasCost=$gasCostFormatted, serviceFee=$serviceFeeFormatted, transactionValue=$transactionValueFormatted, totalNeeded=$totalNeededFormatted")
 
             // Handle conditional funding if needed - pass exact gas cost separately
             val fundingResult = conditionalFundingWithGas(actualWalletAddress, exactGasCost, transactionValue, clientCredentials)
@@ -258,7 +287,8 @@ class BlockchainRelayService(
                     error = "Client wallet credentials required - no wallet configured for this API key"
                 )
             
-            logger.info("Transferring $gasAmount wei to user: $userAddress via Gas Payer Contract using client wallet ${credentials.address}")
+            val gasAmountFormatted = formatGasAmount(gasAmount)
+            logger.info("Transferring $gasAmountFormatted to user: $userAddress via Gas Payer Contract using client wallet ${credentials.address}")
             
             // Load contract with the appropriate credentials
             val contractAddress = blockchainProperties.relayer.gasPayerContractAddress
@@ -280,8 +310,9 @@ class BlockchainRelayService(
             // Calculate fee that will be charged by the contract
             val fee = contract.calculateFee(gasAmount).send()
             val totalAmount = gasAmount.add(fee)
-            
-            logger.info("Gas transfer: amount=$gasAmount wei, fee=$fee wei, total=$totalAmount wei from client wallet ${credentials.address}")
+            val feeFormatted = formatGasAmount(fee)
+            val totalFormatted = formatGasAmount(totalAmount)
+            logger.info("Gas transfer: amount=$gasAmountFormatted, fee=$feeFormatted, total=$totalFormatted from client wallet ${credentials.address}")
             
             // Call fundAndRelay with the total amount (gas + fee)
             val receipt = contract.fundAndRelay(
@@ -371,7 +402,11 @@ class BlockchainRelayService(
                 // If user needs X and there's a fee of F, we need to transfer (X + F) so user gets X
                 val gasAmountToTransfer = baseAmountNeeded.add(estimatedFee)
                 
-                logger.info("User has $currentBalance wei, needs $totalNeededForTransaction wei for transaction, transferring $gasAmountToTransfer wei as gas (includes estimated fee $estimatedFee wei)")
+                val currentBalanceFormatted = formatGasAmount(currentBalance)
+                val totalNeededFormatted = formatGasAmount(totalNeededForTransaction)
+                val gasTransferFormatted = formatGasAmount(gasAmountToTransfer)
+                val estimatedFeeFormatted = formatGasAmount(estimatedFee)
+                logger.info("User has $currentBalanceFormatted, needs $totalNeededFormatted for transaction, transferring $gasTransferFormatted as gas (includes estimated fee $estimatedFeeFormatted)")
                 
                 val gasTransferResult = transferGasToUser(walletAddress, gasAmountToTransfer, clientCredentials)
                 if (!gasTransferResult.success) {
@@ -397,9 +432,13 @@ class BlockchainRelayService(
                     )
                 }
                 
-                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
+                val updatedBalanceFormatted = formatGasAmount(updatedBalance)
+                val previousBalanceFormatted = formatGasAmount(currentBalance)
+                logger.info("User balance after gas transfer: $updatedBalanceFormatted (was $previousBalanceFormatted)")
             } else {
-                logger.info("User already has sufficient balance ($currentBalance wei >= $totalNeededForTransaction wei), skipping transfer")
+                val currentBalanceFormatted = formatGasAmount(currentBalance)
+                val totalNeededFormatted = formatGasAmount(totalNeededForTransaction)
+                logger.info("User already has sufficient balance ($currentBalanceFormatted >= $totalNeededFormatted), skipping transfer")
             }
             
             TransactionResult(success = true, transactionHash = null, error = null, contractAddress = null)
@@ -427,7 +466,10 @@ class BlockchainRelayService(
             // Only transfer if user doesn't have enough for the entire transaction
             if (currentBalance < totalAmountNeededWei) {
                 val amountNeeded = totalAmountNeededWei.subtract(currentBalance)
-                logger.info("User has $currentBalance wei, needs $totalAmountNeededWei wei, transferring $amountNeeded wei")
+                val currentBalanceFormatted = formatGasAmount(currentBalance)
+                val totalNeededFormatted = formatGasAmount(totalAmountNeededWei)
+                val amountNeededFormatted = formatGasAmount(amountNeeded)
+                logger.info("User has $currentBalanceFormatted, needs $totalNeededFormatted, transferring $amountNeededFormatted")
                 
                 val gasTransferResult = transferGasToUser(walletAddress, amountNeeded, clientCredentials)
                 if (!gasTransferResult.success) {
@@ -452,9 +494,13 @@ class BlockchainRelayService(
                     )
                 }
                 
-                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
+                val updatedBalanceFormatted = formatGasAmount(updatedBalance)
+                val previousBalanceFormatted = formatGasAmount(currentBalance)
+                logger.info("User balance after gas transfer: $updatedBalanceFormatted (was $previousBalanceFormatted)")
             } else {
-                logger.info("User already has sufficient balance ($currentBalance wei >= $totalAmountNeededWei wei), skipping transfer")
+                val currentBalanceFormatted = formatGasAmount(currentBalance)
+                val totalNeededFormatted = formatGasAmount(totalAmountNeededWei)
+                logger.info("User already has sufficient balance ($currentBalanceFormatted >= $totalNeededFormatted), skipping transfer")
             }
             
             TransactionResult(success = true, transactionHash = null, error = null, contractAddress = null)
@@ -501,7 +547,8 @@ class BlockchainRelayService(
             // Final check after all attempts
             val finalBalance = web3j.ethGetBalance(userAddress, DefaultBlockParameterName.LATEST).send().balance
             if (finalBalance >= requiredAmount) {
-                logger.info("Balance sufficient after timeout period: $finalBalance wei")
+                val finalBalanceFormatted = formatGasAmount(finalBalance)
+                logger.info("Balance sufficient after timeout period: $finalBalanceFormatted")
                 return finalBalance
             }
             

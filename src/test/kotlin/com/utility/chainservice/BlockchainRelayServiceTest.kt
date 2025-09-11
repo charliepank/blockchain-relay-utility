@@ -50,7 +50,7 @@ class BlockchainRelayServiceTest {
                 gasPayerContractAddress = "0x1234567890123456789012345678901234567890"
             }
         }
-        blockchainRelayService = BlockchainRelayService(web3j, gasProvider, chainId, blockchainProperties)
+        blockchainRelayService = BlockchainRelayService(web3j, gasProvider, chainId, blockchainProperties, null)
     }
 
     @Test
