@@ -668,7 +668,12 @@ class BlockchainRelayService(
             val multiplierScaled = (blockchainProperties.gas.maxGasPriceMultiplier * 100).toLong()
             val maxAllowedGasPrice = currentNetworkGasPrice.multiply(BigInteger.valueOf(multiplierScaled)).divide(BigInteger.valueOf(100))
             
-            logger.info("Gas validation: operation=$operationName, userGasLimit=$userProvidedGas, expectedGasLimit=$expectedGasLimit, maxAllowedGasLimit=$gasLimitToValidate, userGasPrice=$userGasPrice, maxGasPrice=$maxAllowedGasPrice, totalCost=$totalCost, maxCost=$maxAllowedCost")
+            val userGasPriceFormatted = formatGasAmount(userGasPrice)
+            val maxGasPriceFormatted = formatGasAmount(maxAllowedGasPrice)
+            val totalCostFormatted = formatGasAmount(totalCost)
+            val maxCostFormatted = formatGasAmount(maxAllowedCost)
+            
+            logger.info("Gas validation: operation=$operationName, userGasLimit=$userProvidedGas, expectedGasLimit=$expectedGasLimit, maxAllowedGasLimit=$gasLimitToValidate, userGasPrice=$userGasPriceFormatted, maxGasPrice=$maxGasPriceFormatted, totalCost=$totalCostFormatted, maxCost=$maxCostFormatted")
 
             // Check total cost - only use fallback limit if no operation-specific limit provided
             if (expectedGasLimit == BigInteger.ZERO && totalCost > maxAllowedCost) {
