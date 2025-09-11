@@ -158,20 +158,40 @@ class BlockchainRelayService(
                 }
             }
             
-            // Apply price multiplier to ensure user has enough funds when transaction is executed
-            val gasCost = baseGasCost.multiply(
-                BigInteger.valueOf((blockchainProperties.gas.priceMultiplier * 100).toLong())
-            ).divide(BigInteger.valueOf(100))
+            // Use exact gas cost from the signed transaction (no multiplier for funding)
+            val exactGasCost = baseGasCost
             
-            logger.debug("Gas cost calculation: baseGasCost=$baseGasCost, priceMultiplier=${blockchainProperties.gas.priceMultiplier}, adjustedGasCost=$gasCost")
+            // Calculate the service fee that will be charged by the contract
+            // We need to check this upfront to ensure user has enough for gas + fee
+            val serviceFee = try {
+                // Only calculate fee if we have client credentials (required for contract calls)
+                if (clientCredentials != null) {
+                    val contract = GasPayerContract.load(
+                        blockchainProperties.relayer.gasPayerContractAddress,
+                        web3j,
+                        clientCredentials,
+                        gasProvider
+                    )
+                    contract.calculateFee(exactGasCost).send()
+                } else {
+                    // Fallback: estimate 5% fee if no credentials available
+                    exactGasCost.multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(100))
+                }
+            } catch (e: Exception) {
+                logger.warn("Could not calculate service fee upfront, using estimate: ${e.message}")
+                // Fallback: estimate 5% fee if contract call fails
+                exactGasCost.multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(100))
+            }
             
-            // Total amount needed = gas cost + transaction value
-            val totalAmountNeeded = gasCost.add(transactionValue)
+            logger.debug("Gas cost calculation: exactGasCost=$exactGasCost, serviceFee=$serviceFee")
             
-            logger.info("Transaction requires: gasLimit=$userGasLimit, gasCost=$gasCost wei (with ${blockchainProperties.gas.priceMultiplier}x multiplier), transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
+            // Total amount needed = exact gas cost + service fee + transaction value
+            val totalAmountNeeded = exactGasCost.add(serviceFee).add(transactionValue)
+            
+            logger.info("Transaction requires: gasLimit=$userGasLimit, exactGasCost=$exactGasCost wei, serviceFee=$serviceFee wei, transactionValue=$transactionValue wei, totalNeeded=$totalAmountNeeded wei")
 
-            // Handle conditional funding if needed
-            val fundingResult = conditionalFunding(actualWalletAddress, totalAmountNeeded, clientCredentials)
+            // Handle conditional funding if needed - pass exact gas cost separately
+            val fundingResult = conditionalFundingWithGas(actualWalletAddress, exactGasCost, transactionValue, clientCredentials)
             if (!fundingResult.success) {
                 return TransactionResult(
                     success = false,
@@ -307,6 +327,69 @@ class BlockchainRelayService(
             null
         }
         return conditionalFunding(walletAddress, totalAmountNeededWei, clientCredentials)
+    }
+
+    private suspend fun conditionalFundingWithGas(
+        walletAddress: String,
+        exactGasCost: BigInteger,
+        transactionValue: BigInteger,
+        clientCredentials: Credentials?
+    ): TransactionResult {
+        return try {
+            // Check user's current AVAX balance
+            val currentBalance = web3j.ethGetBalance(walletAddress, DefaultBlockParameterName.LATEST).send().balance
+            
+            // Calculate what we need for gas + transaction value (user pays the fee)
+            val totalNeededForTransaction = exactGasCost.add(transactionValue)
+            
+            // Only transfer if user doesn't have enough for the gas + transaction value
+            if (currentBalance < totalNeededForTransaction) {
+                // We need to fund the user with enough for their transaction
+                // The deficit should be treated as the gas amount to transfer
+                val gasAmountToTransfer = totalNeededForTransaction.subtract(currentBalance)
+                
+                logger.info("User has $currentBalance wei, needs $totalNeededForTransaction wei for transaction, transferring $gasAmountToTransfer wei as gas")
+                
+                val gasTransferResult = transferGasToUser(walletAddress, gasAmountToTransfer, clientCredentials)
+                if (!gasTransferResult.success) {
+                    logger.error("Failed to transfer gas to user: ${gasTransferResult.error}")
+                    return TransactionResult(
+                        success = false,
+                        transactionHash = null,
+                        error = "Failed to transfer gas to user: ${gasTransferResult.error}",
+                        contractAddress = null
+                    )
+                }
+                
+                // Wait for balance to update with retry mechanism
+                // The user should have at least totalNeededForTransaction after the transfer
+                val updatedBalance = waitForBalanceUpdate(walletAddress, currentBalance, totalNeededForTransaction)
+                if (updatedBalance == null) {
+                    logger.error("Balance update timeout after gas transfer")
+                    return TransactionResult(
+                        success = false,
+                        transactionHash = null,
+                        error = "Balance update timeout after gas transfer",
+                        contractAddress = null
+                    )
+                }
+                
+                logger.info("User balance after gas transfer: $updatedBalance wei (was $currentBalance wei)")
+            } else {
+                logger.info("User already has sufficient balance ($currentBalance wei >= $totalNeededForTransaction wei), skipping transfer")
+            }
+            
+            TransactionResult(success = true, transactionHash = null, error = null, contractAddress = null)
+            
+        } catch (e: Exception) {
+            logger.error("Error in conditional funding", e)
+            TransactionResult(
+                success = false,
+                transactionHash = null,
+                error = e.message ?: "Unknown error in funding",
+                contractAddress = null
+            )
+        }
     }
 
     private suspend fun conditionalFunding(
