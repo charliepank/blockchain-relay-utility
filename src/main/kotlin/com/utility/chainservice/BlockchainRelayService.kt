@@ -535,9 +535,9 @@ class BlockchainRelayService(
                 
                 // Even if balance increased but still not sufficient, continue waiting
                 if (currentBalance > previousBalance) {
-                    logger.debug("Balance partially updated ($currentBalance wei), still waiting for full update (need $requiredAmount wei)")
+                    logger.debug("Balance partially updated (${formatGasAmount(currentBalance)}), still waiting for full update (need ${formatGasAmount(requiredAmount)})")
                 } else {
-                    logger.debug("Balance not yet updated (attempt ${attempts + 1}/$maxAttempts): $currentBalance wei")
+                    logger.debug("Balance not yet updated (attempt ${attempts + 1}/$maxAttempts): ${formatGasAmount(currentBalance)}")
                 }
                 
                 Thread.sleep(2000)
@@ -552,7 +552,7 @@ class BlockchainRelayService(
                 return finalBalance
             }
             
-            logger.warn("Balance update timeout after $maxAttempts attempts. Final balance: $finalBalance wei, required: $requiredAmount wei")
+            logger.warn("Balance update timeout after $maxAttempts attempts. Final balance: ${formatGasAmount(finalBalance)}, required: ${formatGasAmount(requiredAmount)}")
             null
         } catch (e: Exception) {
             logger.error("Error waiting for balance update", e)
@@ -677,20 +677,20 @@ class BlockchainRelayService(
 
             // Check total cost - only use fallback limit if no operation-specific limit provided
             if (expectedGasLimit == BigInteger.ZERO && totalCost > maxAllowedCost) {
-                logger.warn("Transaction exceeds maximum fallback cost: $totalCost > $maxAllowedCost wei")
+                logger.warn("Transaction exceeds maximum fallback cost: ${formatGasAmount(totalCost)} > ${formatGasAmount(maxAllowedCost)}")
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = "Transaction cost too high: $totalCost wei, maximum allowed $maxAllowedCost wei"
+                    error = "Transaction cost too high: ${formatGasAmount(totalCost)}, maximum allowed ${formatGasAmount(maxAllowedCost)}"
                 )
             }
 
             // Check gas limit against operation-specific or maximum limit
             if (userProvidedGas > gasLimitToValidate) {
                 val errorMsg = if (expectedGasLimit > BigInteger.ZERO) {
-                    "Gas limit exceeds expected for operation '$operationName': provided $userProvidedGas, maximum allowed $gasLimitToValidate (includes 20% buffer)"
+                    "Gas limit exceeds expected for operation '$operationName': provided ${formatGasAmount(userProvidedGas.multiply(userGasPrice))}, maximum allowed ${formatGasAmount(gasLimitToValidate.multiply(userGasPrice))} (includes 20% buffer)"
                 } else {
-                    "Gas limit too high: provided $userProvidedGas, maximum allowed $gasLimitToValidate"
+                    "Gas limit too high: provided ${formatGasAmount(userProvidedGas.multiply(userGasPrice))}, maximum allowed ${formatGasAmount(gasLimitToValidate.multiply(userGasPrice))}"
                 }
                 logger.warn(errorMsg)
                 return TransactionResult(
@@ -706,7 +706,7 @@ class BlockchainRelayService(
                 return TransactionResult(
                     success = false,
                     transactionHash = null,
-                    error = "Gas price too high: provided $userGasPrice, maximum allowed $maxAllowedGasPrice (current network: $currentNetworkGasPrice)"
+                    error = "Gas price too high: provided ${formatGasAmount(userGasPrice)}, maximum allowed ${formatGasAmount(maxAllowedGasPrice)} (current network: ${formatGasAmount(currentNetworkGasPrice)})"
                 )
             }
 

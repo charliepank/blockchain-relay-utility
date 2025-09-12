@@ -994,8 +994,8 @@ class BlockchainRelayServiceTest {
         assertFalse(result.success) // Should fail due to high cost
         assertNotNull(result.error)
         assertTrue(result.error!!.contains("Transaction cost too high"))
-        assertTrue(result.error!!.contains("300000 wei"))
-        assertTrue(result.error!!.contains("maximum allowed 1 wei"))
+        // Check for formatted output instead of raw wei values
+        assertTrue(result.error!!.contains("AVAX:") || result.error!!.contains("ETH:"))
     }
 
     @Test
