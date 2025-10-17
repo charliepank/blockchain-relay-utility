@@ -182,9 +182,14 @@ class BlockchainRelayService(
                 }
             }
             
-            // Use exact gas cost from the signed transaction (no multiplier for funding)
-            val exactGasCost = baseGasCost
-            
+            // Apply configured safety margin to gas funding
+            val multiplier = BigInteger.valueOf((blockchainProperties.gas.priceMultiplier * 100).toLong())
+            val exactGasCost = baseGasCost.multiply(multiplier).divide(BigInteger.valueOf(100))
+
+            val baseGasCostFormatted = formatGasAmount(baseGasCost)
+            val exactGasCostFormatted = formatGasAmount(exactGasCost)
+            logger.info("Applied gas price multiplier ${blockchainProperties.gas.priceMultiplier}x: baseGasCost=$baseGasCostFormatted, fundingAmount=$exactGasCostFormatted")
+
             // Calculate the service fee that will be charged by the contract
             // We need to check this upfront to ensure user has enough for gas + fee
             val serviceFee = try {
